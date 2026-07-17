@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="DotNetXISF/DotNetXISF.csproj" />
+  <Project Path="DotNetXISFTests/DotNetXISFTests.csproj" />
+</Solution>
