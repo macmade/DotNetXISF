@@ -375,7 +375,7 @@
         <div class="phase">Phase 1 &middot; Foundations</div>
         <ol>
             <li><a href="#m1"><span class="num">M1</span> Project bootstrap, conventions &amp; constants</a> <span class="capsule status-completed">Completed</span></li>
-            <li><a href="#m2"><span class="num">M2</span> Errors &amp; parsing options</a> <span class="capsule status-not-started">Not started</span></li>
+            <li><a href="#m2"><span class="num">M2</span> Errors &amp; parsing options</a> <span class="capsule status-completed">Completed</span></li>
             <li><a href="#m3"><span class="num">M3</span> Low-level helpers &amp; test infrastructure</a> <span class="capsule status-not-started">Not started</span></li>
         </ol>
 
@@ -494,7 +494,7 @@
     <div class="milestone" id="m2">
         <div class="m-head">
             <h3>M2 &middot; Errors &amp; parsing options</h3>
-            <span class="capsule status-not-started">Not started</span>
+            <span class="capsule status-completed">Completed</span>
         </div>
         <div class="field">
             <div class="label">Goal</div>
@@ -510,11 +510,70 @@
                 <li class="task">Full XML doc comments on every type and member, including the private constructor and internal factories.</li>
             </ul>
         </div>
-        <div class="field"><div class="label">Status</div><span class="capsule status-not-started">Not started</span></div>
-        <div class="field"><div class="label">Completed</div><span class="placeholder">&mdash;</span></div>
-        <div class="field"><div class="label">Implementation notes</div><p class="placeholder">To be filled in during implementation.</p></div>
-        <div class="field"><div class="label">Automated review</div><p class="placeholder">To be filled in during implementation.</p></div>
-        <div class="field"><div class="label">Review comments</div><p class="placeholder">Awaiting human review.</p></div>
+        <div class="field"><div class="label">Status</div><span class="capsule status-completed">Completed</span></div>
+        <div class="field"><div class="label">Completed</div>2026-07-19</div>
+        <div class="field"><div class="label">Implementation notes</div>
+            <p>Implemented with TDD. Wrote the exception and options tests first, confirmed they failed to compile
+            (the types did not exist), then implemented the three types to green. Placed under <code>Core/</code>,
+            mirroring the source project's <code>Core/</code> layout for these two files (not split into
+            <code>Errors/</code>/<code>Options/</code>).</p>
+            <ul>
+                <li><strong><code>XISFErrorKind</code>:</strong> a <code>public enum</code> with all 11 cases
+                    (<code>InvalidFileUrl</code>, <code>CannotReadFile</code>, <code>InvalidSignature</code>,
+                    <code>InvalidHeaderLength</code>, <code>MalformedXml</code>, <code>InvalidElement</code>,
+                    <code>DataBlockError</code>, <code>DecompressionError</code>, <code>ChecksumMismatch</code>,
+                    <code>DataError</code>, <code>Unsupported</code>). Used .NET acronym casing
+                    (<code>Url</code>/<code>Xml</code>, not <code>URL</code>/<code>XML</code>) per the Framework Design
+                    Guidelines; the enum member, factory name and every <code>&lt;see cref&gt;</code> agree.</li>
+                <li><strong><code>XISFException</code>:</strong> a <code>sealed class : Exception</code> carrying a
+                    <code>Kind</code> property, a shared <code>"XISF Error: "</code> message prefix, a private
+                    <code>(kind, description)</code> constructor and one <code>public static</code> factory per case.
+                    Each factory's message text matches the source project's error descriptions verbatim (for example
+                    <code>Invalid file URL: { path }</code>, <code>Malformed XML: { reason }</code>). The path-carrying
+                    factories (<code>InvalidFileUrl</code>/<code>CannotReadFile</code>) take a <code>string</code> path;
+                    the rest take a <code>string</code> reason.</li>
+                <li><strong><code>XISFParsingOptions</code>:</strong> a <code>[ Flags ]</code> enum &mdash;
+                    <code>None = 0</code>, <code>VerifyChecksums = 1 &lt;&lt; 0</code>,
+                    <code>AllowExternalLocations = 1 &lt;&lt; 1</code>, <code>AllowSpecDeviations = 1 &lt;&lt; 2</code>,
+                    <code>Strict = VerifyChecksums</code>, <code>Lenient = AllowSpecDeviations</code>. Presets alias
+                    single flags, exactly as in the source; external-location resolution stays off in both presets.</li>
+                <li><strong>Tests:</strong> the exception test asserts each factory's <code>Kind</code> and its exact
+                    <code>Message</code> (prefix + label + payload) across all 11 cases &mdash; stricter than the source
+                    (which only checked substring containment) and adding the <code>Unsupported</code> case it omitted.
+                    The options tests cover the bit values, both presets, external-off-in-both, and a raw-value
+                    round-trip. Full XML docs on every type and member, including the private constructor and private
+                    test constants.</li>
+                <li><strong>One deviation encountered:</strong> a throw-only lambda passed to
+                    <code>Assert.Throws&lt;T&gt;</code> bound to the obsolete <code>Func&lt;Task&gt;</code> overload
+                    (error under warnings-as-errors). Replaced that redundant test with a direct
+                    <code>Assert.IsAssignableFrom&lt;Exception&gt;</code> check.</li>
+                <li><strong>Result:</strong> <code>dotnet build</code> clean (0 warnings, 0 errors) and
+                    <code>dotnet test</code> green (8 passed, 0 failed) in both Debug and Release; no M1 regression.</li>
+            </ul>
+        </div>
+        <div class="field"><div class="label">Automated review</div>
+            <p>One review round (fresh-context sub-agent); converged immediately. <strong>No Critical/High/Medium
+            findings.</strong> The reviewer independently rebuilt/re-ran both configs (8/8 pass, 0 warnings), confirmed
+            all 11 error cases and the verbatim message text against the source, verified the flag bits/presets, and
+            confirmed no M1 regression. Three <code>Info</code> notes, all confirming faithful behavior (no action):</p>
+            <ul>
+                <li><strong>Acronym casing</strong> (Info, Deferred) &mdash; <code>Url</code>/<code>Xml</code> conforms
+                    better to the .NET guidelines than the FITS sibling's <code>URL</code>; internally consistent.</li>
+                <li><strong>Stricter-than-source message test</strong> (Info, Deferred) &mdash; full-equality assertions
+                    plus the <code>Unsupported</code> case; a stronger port, not a regression.</li>
+                <li><strong>Presets alias single flags</strong> (Info, Deferred) &mdash; matches the source semantics and
+                    builds cleanly; differs from FITS only because FITS presets are multi-bit.</li>
+            </ul>
+        </div>
+        <div class="field"><div class="label">Review comments</div>
+            <ul>
+                <li><strong>Acronym casing confirmed.</strong> The maintainer approved the .NET-idiomatic acronym casing
+                    (<code>Url</code>/<code>Xml</code> rather than all-caps <code>URL</code>/<code>XML</code>), diverging
+                    from the FITS sibling. <em>Apply this casing convention consistently across the rest of the port</em>
+                    (for example the XML parser, ICC/RGB/CFA/UUID identifiers in later milestones).</li>
+                <li>Everything else in the milestone approved as-is.</li>
+            </ul>
+        </div>
     </div>
 
     <!-- M3 -->
