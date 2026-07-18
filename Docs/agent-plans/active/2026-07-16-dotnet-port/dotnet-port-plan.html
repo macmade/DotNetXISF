@@ -1,0 +1,937 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Port SwiftXISF to C# / .NET 10 &mdash; Implementation Plan</title>
+<style>
+    :root {
+        --bg:            #0f1115;
+        --bg-elev:       #171a21;
+        --bg-elev-2:     #1e222b;
+        --border:        #2a2f3a;
+        --text:          #d7dce4;
+        --text-dim:      #9aa4b2;
+        --text-faint:    #6b7482;
+        --accent:        #6ea8fe;
+        --accent-soft:   #24314a;
+        --code-bg:       #12151b;
+        --green-bg:      #14351f;
+        --green-fg:      #6ee7a0;
+        --green-bd:      #1f5c37;
+        --amber-bg:      #3a2f12;
+        --amber-fg:      #f2c14e;
+        --amber-bd:      #6b551d;
+        --gray-bg:       #262b34;
+        --gray-fg:       #aab2bf;
+        --gray-bd:       #3a414d;
+        --radius:        10px;
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        line-height: 1.6;
+        font-size: 16px;
+    }
+    .wrap { max-width: 960px; margin: 0 auto; padding: 48px 24px 96px; }
+    h1, h2, h3, h4 { line-height: 1.25; font-weight: 650; color: #fff; }
+    h1 { font-size: 2rem; margin: 0 0 8px; letter-spacing: -0.02em; }
+    h2 { font-size: 1.4rem; margin: 48px 0 16px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
+    h3 { font-size: 1.15rem; margin: 28px 0 10px; }
+    h4 { font-size: 1rem; margin: 20px 0 8px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600; }
+    p { margin: 10px 0; }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    code, pre, .mono { font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace; font-size: 0.88em; }
+    code { background: var(--code-bg); padding: 1px 5px; border-radius: 5px; color: #cdd6e4; }
+    pre { background: var(--code-bg); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; overflow-x: auto; }
+    pre code { background: none; padding: 0; }
+    ul, ol { margin: 10px 0; padding-left: 22px; }
+    li { margin: 5px 0; }
+    strong { color: #eef1f6; }
+    hr { border: none; border-top: 1px solid var(--border); margin: 32px 0; }
+
+    .subtitle { color: var(--text-dim); font-size: 1.05rem; margin-top: 0; }
+    .meta { display: flex; flex-wrap: wrap; gap: 8px 28px; margin: 20px 0 8px; padding: 16px 18px; background: var(--bg-elev); border: 1px solid var(--border); border-radius: var(--radius); }
+    .meta div { font-size: 0.92rem; }
+    .meta .label { color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.06em; font-size: 0.72rem; display: block; margin-bottom: 2px; }
+
+    .capsule { display: inline-block; padding: 2px 11px; border-radius: 999px; font-size: 0.74rem; font-weight: 650; letter-spacing: 0.03em; text-transform: uppercase; border: 1px solid transparent; white-space: nowrap; vertical-align: middle; }
+    .status-not-started { background: var(--gray-bg);  color: var(--gray-fg);  border-color: var(--gray-bd); }
+    .status-in-progress { background: var(--amber-bg); color: var(--amber-fg); border-color: var(--amber-bd); }
+    .status-completed   { background: var(--green-bg); color: var(--green-fg); border-color: var(--green-bd); }
+
+    .callout { background: var(--bg-elev); border: 1px solid var(--border); border-left: 3px solid var(--accent); border-radius: var(--radius); padding: 14px 18px; margin: 16px 0; }
+    .callout.warn { border-left-color: var(--amber-fg); }
+
+    .qa { margin: 14px 0; padding: 16px 18px; background: var(--bg-elev); border: 1px solid var(--border); border-radius: var(--radius); }
+    .qa .q { font-weight: 650; color: #fff; margin-bottom: 6px; }
+    .qa .a { color: var(--text-dim); }
+    .qa .a b { color: var(--green-fg); font-weight: 650; }
+
+    table { border-collapse: collapse; width: 100%; margin: 14px 0; font-size: 0.9rem; }
+    th, td { text-align: left; padding: 8px 12px; border: 1px solid var(--border); vertical-align: top; }
+    th { background: var(--bg-elev-2); color: var(--text); font-weight: 600; }
+    td { background: var(--bg-elev); color: var(--text-dim); }
+    .table-scroll { overflow-x: auto; }
+
+    /* Table of contents */
+    .toc { background: var(--bg-elev); border: 1px solid var(--border); border-radius: var(--radius); padding: 8px 20px 16px; }
+    .toc .phase { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-faint); margin: 16px 0 6px; font-weight: 700; }
+    .toc ol { list-style: none; padding: 0; margin: 0; counter-reset: none; }
+    .toc li { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 6px 0; border-bottom: 1px dashed var(--border); }
+    .toc li:last-child { border-bottom: none; }
+    .toc a { flex: 1; }
+    .toc .num { color: var(--text-faint); font-family: ui-monospace, monospace; font-size: 0.82em; margin-right: 8px; }
+
+    /* Milestones */
+    .milestone { background: var(--bg-elev); border: 1px solid var(--border); border-radius: var(--radius); padding: 4px 22px 22px; margin: 18px 0; scroll-margin-top: 20px; }
+    .milestone .m-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-top: 18px; }
+    .milestone .m-head h3 { margin: 0; }
+    .field { margin: 14px 0 0; }
+    .field .label { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.07em; color: var(--text-faint); font-weight: 700; margin-bottom: 3px; }
+    .field .placeholder { color: var(--text-faint); font-style: italic; }
+
+    ul.tasks { list-style: none; padding-left: 4px; margin: 6px 0; }
+    ul.tasks li.task { position: relative; padding-left: 30px; margin: 7px 0; }
+    ul.tasks li.task::before { content: "\2610"; position: absolute; left: 0; top: -1px; font-size: 1.15em; color: var(--text-faint); }
+    ul.tasks li.task.done::before { content: "\2611"; color: var(--green-fg); }
+    ul.tasks li.task.done { color: var(--text-faint); text-decoration: line-through; }
+
+    .phase-banner { margin: 40px 0 4px; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--accent); font-weight: 700; }
+
+    .footer { margin-top: 64px; padding-top: 20px; border-top: 1px solid var(--border); color: var(--text-faint); font-size: 0.85rem; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+    <h1>Port SwiftXISF to C# / .NET 10</h1>
+    <p class="subtitle">A milestone-based plan to port the SwiftXISF read-only XISF-file parser to an idiomatic, maintainable C# library targeting .NET&nbsp;10, with the full test suite ported to xUnit.</p>
+
+    <div class="meta">
+        <div><span class="label">Generated</span> 2026-07-18</div>
+        <div><span class="label">Source</span> <code>Docs/agent-plans/active/2026-07-16-dotnet-port/dotnet-port.md</code></div>
+        <div><span class="label">Target</span> .NET 10 &middot; C# latest &middot; xUnit v3</div>
+        <div><span class="label">Original</span> <code>../SwiftXISF</code></div>
+        <div><span class="label">Sibling port</span> <code>../DotNetFITS</code></div>
+    </div>
+
+    <h2>Overview</h2>
+    <p>
+        SwiftXISF is a <strong>read-only</strong> parser for monolithic <a href="https://pixinsight.com/doc/docs/XISF-1.0-spec/XISF-1.0-spec.html">XISF&nbsp;1.0</a>
+        files (PixInsight's native image format), written in Swift&nbsp;6: roughly <strong>4,979 lines across 30 source
+        files</strong> and <strong>~3,573 lines across 31 test files</strong> (<strong>226 <code>@Test</code> functions</strong>
+        using the swift-testing framework). A single <code>XISFFile</code> entry point, opened from a file path or a byte
+        buffer, validates the 16-byte binary preamble and the UTF-8 XML header and exposes the file's <em>images</em>
+        (typed geometry / sample format / color space plus fully decoded opaque pixel bytes), <em>properties</em>,
+        embedded <em>FITS keywords</em>, unit <em>metadata</em> and per-image color/ancillary elements. Pixel and
+        data-block bytes are decoded lazily on access &mdash; that is where base64/hex decoding, attachment slicing,
+        decompression, checksum verification and (opt-in) external-file resolution happen.
+    </p>
+    <p>
+        This plan ports the whole library and its tests to C# / .NET 10. The approach is <strong>dependency-ordered and
+        incremental</strong>: each milestone ports one layer (or one concern of a large type), adds its tests, and leaves
+        the solution <strong>compiling with all tests green in both Debug and Release</strong>, so every milestone can be
+        reviewed and committed on its own. The port favors <strong>idiomatic C#</strong> over a mechanical translation
+        while preserving the public API shape, type structure, names and observable behavior wherever practical, so a
+        SwiftXISF user recognizes the C# API. It deliberately mirrors the completed sibling port
+        (<a href="../../../../DotNetFITS/Docs/agent-plans/completed/2026-07-16-dotnet-port/dotnet-port-plan.html"><code>DotNetFITS</code></a>)
+        &mdash; the same conventions, scaffolding and cross-cutting lessons carry over. The scaffolding
+        (<code>DotNetXISF.slnx</code>, the <code>DotNetXISF</code> class library and the xUnit&nbsp;v3
+        <code>DotNetXISFTests</code> project with <code>InternalsVisibleTo</code>, nullable reference types,
+        overflow checks and warnings-as-errors) is already in place, and the two sample <code>.xisf</code> fixtures are
+        already present at the repository root under <code>Test&nbsp;Files/</code>.
+    </p>
+    <p>
+        Unlike DotNetFITS &mdash; which is pure C# with no third-party dependencies &mdash; XISF's data-block codecs force
+        two managed NuGet dependencies (see Q1). Everything else stays inside the .NET base class library.
+    </p>
+
+    <h2>Questions &amp; answers</h2>
+    <p>The design decisions settled with the maintainer before planning. (Choices carried over unchanged from the
+        DotNetFITS precedent &mdash; binary data as <code>ReadOnlyMemory&lt;byte&gt;</code> and the single-exception error
+        model &mdash; are recorded in the Notes rather than re-asked here.)</p>
+
+    <div class="qa">
+        <div class="q">1. SwiftXISF decodes four compression codecs, two of which have no .NET BCL equivalent. Which decompression dependencies should the port take?</div>
+        <div class="a">
+            <b>Built-in <code>ZLibStream</code> for zlib, plus two pure-managed NuGet packages: <code>K4os.Compression.LZ4</code>
+            (lz4 / lz4hc) and <code>ZstdSharp.Port</code> (zstd).</b> .NET&nbsp;10's <code>System.IO.Compression</code>
+            covers only Deflate/GZip/zlib and Brotli &mdash; there is no inbox LZ4, and zstd only arrives inbox in
+            .NET&nbsp;11 &mdash; so a net10.0 library must take third-party packages for those two codecs (SwiftXISF itself
+            pulls in the native <code>libzstd</code>). Both chosen packages are <strong>pure managed</strong> (no native
+            binaries), MIT-licensed, cross-platform and actively maintained, which keeps the Windows CI friction-free.
+            <code>K4os.Compression.LZ4</code> (~138&nbsp;M downloads) decodes raw LZ4 blocks directly, and LZ4HC just emits
+            standard LZ4 blocks so the same decoder handles both. <code>ZstdSharp.Port</code> (~240&nbsp;M downloads) is a
+            C# transpilation currently tracking upstream zstd&nbsp;v1.5.7 &mdash; the very version SwiftXISF's
+            <code>libzstd</code> pins &mdash; and exposes a one-shot <code>Unwrap</code> into a known output size, which
+            fits XISF's fixed-output decode. The native binding <code>ZstdNet</code> was rejected: it ships per-platform
+            native assets and carries far less adoption and a more intermittent history. The package references are added
+            in the compression milestone (M8), where they are first used, not at bootstrap.
+        </div>
+    </div>
+
+    <div class="qa">
+        <div class="q">2. SwiftXISF gates SHA-3 checksums by platform availability; .NET's <code>SHA3_256</code>/<code>SHA3_512</code> throw where the OS lacks SHA-3. How should the port behave?</div>
+        <div class="a">
+            <b>Mirror SwiftXISF and degrade gracefully.</b> SHA-1 / SHA-256 / SHA-512 are always available. For SHA-3, check
+            <code>SHA3_256.IsSupported</code> / <code>SHA3_512.IsSupported</code> before use; when a file requests a SHA-3
+            digest but the platform cannot provide it, throw the XISF <em>unsupported</em> error
+            (<code>XISFException.Unsupported(...)</code>) rather than letting <code>PlatformNotSupportedException</code>
+            surface or silently passing verification. This matches the Swift availability-gated behavior; the SHA-3 test
+            adapts to skip/expect-unsupported the way the Swift <code>matchesSHA3</code> test does.
+        </div>
+    </div>
+
+    <div class="qa">
+        <div class="q">3. How should the XML header parser be implemented in C#?</div>
+        <div class="a">
+            <b>Keep the internal <code>XISFElement</code> tree and port <code>XISFXMLParser</code> over
+            <code>System.Xml.XmlReader</code>.</b> Everything downstream parses from the <code>XISFElement</code> tree, and
+            <code>XISFXMLParser</code> is unit-tested in its own right, so preserving that structure keeps the type
+            relationships and the parser tests meaningful. The reader is configured to be namespace-aware, to extract
+            local names, to compare names case-sensitively, and to be safe by construction &mdash;
+            <code>DtdProcessing&nbsp;=&nbsp;Prohibit</code> and <code>XmlResolver&nbsp;=&nbsp;null</code> disable DTD and
+            external-entity resolution, matching SwiftXISF's disabling of external entities. LINQ-to-XML was rejected as it
+            would reshape both the internal structure and the parser tests.
+        </div>
+    </div>
+
+    <div class="qa">
+        <div class="q">4. What C# shape should <code>XISFValue</code> take (a Swift enum with eight cases, including <code>Data</code> and a <code>Date</code>)?</div>
+        <div class="a">
+            <b>A <code>readonly struct</code> with an <code>XISFValueKind</code> discriminator, static factory methods and
+            nullable typed accessors</b>, consistent with DotNetFITS's <code>FITSValue</code>. It implements
+            <code>IEquatable&lt;XISFValue&gt;</code> with the Swift equality quirk that <code>NaN == NaN</code> (and a
+            matching <code>GetHashCode</code>). The eight cases are boolean, signed integer (<code>long</code>), unsigned
+            integer (<code>ulong</code>), float (<code>double</code>), complex (<code>real</code>/<code>imaginary</code>
+            doubles), string, time-point (<code>DateTimeOffset</code>), and data (<code>ReadOnlyMemory&lt;byte&gt;</code>).
+            A value type is the closest match to Swift's value-type enum and is consistent with the
+            <code>ReadOnlyMemory&lt;byte&gt;</code> binary-data choice; a sealed class hierarchy was rejected as it would
+            allocate per value and diverge from the FITS precedent.
+        </div>
+    </div>
+
+    <h2>Notes</h2>
+
+    <h3>Conventions</h3>
+    <ul>
+        <li><strong>Naming:</strong> normal .NET conventions (PascalCase members, <code>I</code>-prefixed interfaces), but
+            keep SwiftXISF <strong>formatting</strong> conventions (Allman braces; spaces inside parentheses, brackets
+            &mdash; including attributes, <code>[ Fact ]</code> &mdash; and generic angle brackets; spaces inside
+            interpolation holes; aligned <code>=</code>) as the source document requests. One public type per file,
+            organized into subfolders that mirror the SwiftXISF layout.</li>
+        <li><strong>Namespaces &amp; layout:</strong> a single flat <code>namespace DotNetXISF;</code> (and
+            <code>namespace DotNetXISFTests;</code>) regardless of folder, so the public API stays recognizable. Folders
+            are organizational only, mirroring SwiftXISF: <code>Core/</code>, <code>Checksum/</code>,
+            <code>Color/</code>, <code>Compression/</code>, <code>DataBlock/</code>, <code>Extensions/</code>,
+            <code>Image/</code>, <code>Model/</code>. Tests mirror the library structure with cross-cutting helpers
+            (<code>TestUtilities</code>, <code>TestError</code>, integration/descriptions) at the test-project root.</li>
+        <li><strong>Visibility:</strong> library types are explicitly <code>public</code> by default (per the maintainer's
+            convention); reserve <code>internal</code>/<code>private</code> for genuine implementation details (e.g.
+            <code>XISFElement</code>, <code>XISFXMLParser</code>, <code>XISFDataBlocksFile</code>, and parser-only
+            helpers). The existing <code>InternalsVisibleTo("DotNetXISFTests")</code> makes internal helpers testable.
+            Classes not designed as hierarchies are <code>sealed</code>; leave <code>XISFFile</code> non-sealed to match
+            the non-<code>final</code> Swift class.</li>
+        <li><strong>Members:</strong> mutable state mutates through get/set properties rather than fields; an immutable
+            value type's payload (<code>XISFValue</code>) uses <code>private readonly</code> fields. Lazy caches are
+            nullable auto-properties resolved with <code>??=</code>.</li>
+        <li><strong>Doc comments:</strong> C# XML documentation comments (<code>///</code> with
+            <code>&lt;summary&gt;</code>/<code>&lt;param&gt;</code>/<code>&lt;returns&gt;</code>/<code>&lt;remarks&gt;</code>/<code>&lt;see cref&gt;</code>/<code>&lt;exception&gt;</code>)
+            on <strong>every</strong> type and member, including <code>internal</code>/<code>private</code> ones.
+            <code>GenerateDocumentationFile</code> is enabled on the library so a missing public doc fails the build
+            (<code>CS1591</code>); it is off on the test project.</li>
+        <li><strong>License header:</strong> every file carries the MIT header block (&ldquo;Copyright (c) 2026,
+            Jean-David Gadina - www.xs-labs.com&rdquo;).</li>
+        <li><strong>No references to the Swift original</strong> in code or doc comments &mdash; describe each type on its
+            own terms.</li>
+        <li><strong>Culture independence:</strong> <em>all</em> XISF parsing and formatting must be deterministic and
+            culture-invariant &mdash; use <code>CultureInfo.InvariantCulture</code> for every numeric parse/format and
+            ordinal string comparisons. This is a correctness requirement of the format. Enforced by a repo-root
+            <code>.editorconfig</code> raising the .NET globalization analyzers (<code>CA1305</code>, <code>CA1304</code>,
+            <code>CA1311</code>, <code>CA1310</code>, <code>CA1309</code>) to build errors. <strong>Caveat:</strong> the
+            analyzers do not catch culture-sensitive string <em>interpolation</em> of numbers (<code>$"{value}"</code>),
+            so numbers must never be raw-interpolated, and a culture-swap test (run under <code>fr-FR</code>, asserting the
+            exact string) is required wherever formatting is genuinely culture-sensitive (floats, complex, time-points).</li>
+        <li><strong>Enum zero = neutral:</strong> order each discriminator/enum so the default/neutral case is the zero
+            value where one exists. Non-exhaustive switches end with <code>default: throw XISFException...</code> so a
+            future case fails loud.</li>
+        <li><strong>Async:</strong> the library is synchronous; the Swift tests are <code>async throws</code> only as a
+            swift-testing idiom. The C# port and its tests are synchronous (<code>[ Fact ]</code> methods, no
+            <code>async</code>).</li>
+        <li><strong>Constants:</strong> the XISF preamble constants live on <code>XISFFile</code> as <code>public
+            const</code>/<code>static</code> (<code>Signature = "XISF0100"</code>, <code>PreambleSize = 16</code>,
+            <code>Namespace = "http://www.pixinsight.com/xisf"</code>) to preserve the API. <code>XISFFile.cs</code> is
+            created early holding only these, and completed in the file-layer milestone.</li>
+    </ul>
+
+    <h3>Porting hazards (read before implementing)</h3>
+    <ul>
+        <li><strong>Little-endian binary fields, explicitly.</strong> The preamble header-length (<code>UInt32</code> at
+            offset&nbsp;8) and every <code>.xisb</code> index field are little-endian on disk. Read them with
+            <code>System.Buffers.Binary.BinaryPrimitives.ReadUInt32LittleEndian</code> / <code>ReadUInt64LittleEndian</code>
+            &mdash; never rely on host endianness or unchecked reinterpretation.</li>
+        <li><strong>Slice-relative byte handling.</strong> Swift <code>Data</code> slices keep parent indices;
+            <code>ReadOnlyMemory&lt;byte&gt;.Slice</code> re-bases to 0, so the non-zero-<code>startIndex</code> gotcha
+            disappears &mdash; but the <code>Data</code> extension helpers and attachment slicing must be written against
+            offsets/lengths. <code>attachment(position:size:)</code> offsets are <em>absolute from file start</em>; keep
+            blocks as cheap slices of the whole-file buffer (no copy). <code>File.ReadAllBytes</code> is the analog of the
+            memory-mapped whole-file read (the SIGBUS-on-truncation caveat is dropped).</li>
+        <li><strong>zlib is RFC&nbsp;1950-wrapped.</strong> XISF emits a zlib stream (2-byte header + DEFLATE + 4-byte
+            Adler-32). Prefer <code>System.IO.Compression.ZLibStream</code> (decompress mode), which consumes the wrapper
+            directly &mdash; simpler than SwiftXISF's manual header validation + <code>DeflateStream</code> raw-inflate. If
+            <code>DeflateStream</code> is used instead, replicate the header-strip / Adler-32-trim exactly. All codecs
+            decode to a <em>known</em> uncompressed size.</li>
+        <li><strong>lz4 / lz4hc = raw blocks.</strong> Decode with <code>K4os.Compression.LZ4.LZ4Codec.Decode</code> into a
+            buffer of the declared uncompressed size (raw block, not the LZ4 frame format). lz4hc data decodes through the
+            same path.</li>
+        <li><strong>zstd = one-shot into known size.</strong> Use <code>ZstdSharp.Decompressor.Unwrap</code> with the
+            declared uncompressed size. Dispose the <code>Decompressor</code>.</li>
+        <li><strong>Byte-unshuffle index math is load-bearing.</strong> Reverse the planar de-interleaving exactly:
+            <code>unshuffled[i] = shuffled[(i % itemSize) * items + (i / itemSize)]</code> over the whole-item region,
+            leaving any trailing partial item unchanged. Sub-blocks concatenate independently-decoded streams, each to its
+            declared size, then the total is length-validated against <code>uncompressedSize</code>.</li>
+        <li><strong>Checksum before decompress, opt-in.</strong> Digests are computed over the <em>stored</em>
+            (still-compressed) bytes and verified <em>before</em> decompression, and only when
+            <code>verifyChecksums</code> is set. Algorithm-name matching is case-insensitive across hyphen variants
+            (<code>sha-1</code>/<code>sha1</code>); digest comparison lowercases both sides; hex formatting is
+            <code>x2</code> invariant. SHA-3 is availability-gated (see Q2).</li>
+        <li><strong>Lazy caches store success <em>and</em> failure.</strong> Swift caches a
+            <code>Result&lt;Data, Error&gt;</code> so a failed decode is not retried. Model this in C# with a cached
+            nullable payload plus a captured exception (or <code>Lazy&lt;T&gt;</code> with exception caching), and inherit
+            the documented &ldquo;not thread-safe&rdquo; caveat on <code>XISFFile</code>, <code>XISFImage</code>,
+            <code>XISFDataBlock</code>, <code>XISFICCProfile</code> and <code>XISFThumbnail</code>.</li>
+        <li><strong>External locations are opt-in, lazy and local-only.</strong> <code>url(...)</code>/<code>path(...)</code>
+            blocks resolve only when <code>allowExternalLocations</code> is set (off in both presets) and only on
+            <code>data</code>/<code>rawBytes</code> access; only local <code>file://</code> URLs and both
+            <code>path(...)</code> forms are supported &mdash; <strong>remote URLs are never fetched</strong>. Preserve this
+            security posture. The <code>.xisb</code> block-index walk keeps its cycle-detection (visited set).</li>
+        <li><strong>Culture-sensitive parse sites.</strong> Parse invariantly and range-check per width: geometry
+            (<code>d1:...:dN:channels</code>), image <code>bounds</code> (<code>low:high</code>), resolution,
+            RGB-working-space triplets, display-function component vectors, complex <code>(re,im)</code>, scalar property
+            values, compression sizes, and location index-ids (decimal or <code>0x</code> hex <code>UInt64</code>). Integer
+            parsing is range-checked to the declared width (reject overflow). Booleans accept
+            <code>1</code>/<code>true</code>/<code>0</code>/<code>false</code> (words case-insensitive). Time-points are
+            ISO&nbsp;8601 (with/without fractional seconds) parsed to <code>DateTimeOffset</code> with invariant culture and
+            round-trip styles.</li>
+        <li><strong>Strict vs. lenient threads through every parser.</strong> Under <code>allowSpecDeviations</code>,
+            malformed properties/metadata/ancillary children are <em>dropped</em> rather than fatal, unknown enumerated
+            values fall back to their defaults, and reserved-field / version / size / positivity checks relax. The
+            drop-vs-throw decisions live in <code>XISFProperty.ParseList</code>, <code>XISFImage</code>'s optional-child
+            parsing, <code>XISFFile</code>'s metadata parsing, and each struct's lenient branch &mdash; mirror them
+            precisely.</li>
+        <li><strong>Enumerated-value fallback.</strong> The generic Swift <code>enumeratedValue&lt;T: RawRepresentable&gt;</code>
+            helper (unknown raw value &rarr; default when lenient, throw when strict) becomes a small generic helper over
+            an enum + its declared default.</li>
+    </ul>
+
+    <h3>Test framework mapping</h3>
+    <p>swift-testing &rarr; xUnit&nbsp;v3 (on Microsoft.Testing.Platform). See the <a href="#appendix">appendix</a> for the
+        full table. Highlights: <code>@Test</code> &rarr; <code>[ Fact ]</code>; <code>#expect(x)</code> &rarr;
+        <code>Assert.True</code>/<code>Assert.Equal</code>; <code>try #require(x)</code> &rarr; unwrap-or-fail
+        (<code>Assert.NotNull</code> then use); <code>try #require(throws: XISFError.self){ }</code> &rarr;
+        <code>Assert.Throws&lt;XISFException&gt;(() =&gt; ...)</code>; loop-based multi-case <code>@Test</code>s stay a single
+        <code>[ Fact ]</code> with internal loops (no <code>[ Theory ]</code>); <code>@testable import</code> is covered by
+        <code>InternalsVisibleTo</code>. Test resources resolve via <code>[ CallerFilePath ]</code> (the analog of Swift
+        <code>#filePath</code>): walk from <code>TestUtilities.cs</code> up to the repo root and read <code>Test&nbsp;Files/*.xisf</code>,
+        ordinally sorted &mdash; the two ~20&ndash;26&nbsp;MB fixtures already sit there. Runtime temp files use
+        <code>Path.GetTempPath()</code> + <code>Guid.NewGuid()</code> in a <code>try/finally</code> with a shared
+        <code>RemoveTemporaryFile</code> helper (kept <code>internal</code> to avoid xUnit's <code>xUnit1013</code>). The
+        <code>Compression</code> suite's verbatim hex-encoded compressed-stream fixtures are copied across unchanged.</p>
+
+    <h3>Key components (Swift &rarr; C#)</h3>
+    <div class="table-scroll">
+    <table>
+        <thead><tr><th>Swift file(s) (LOC)</th><th>C# target</th><th>Milestone</th></tr></thead>
+        <tbody>
+            <tr><td><code>XISFError.swift</code> (99)</td><td><code>XISFException</code> + <code>XISFErrorKind</code></td><td>M2</td></tr>
+            <tr><td><code>XISFParsingOptions.swift</code> (74)</td><td><code>[Flags] XISFParsingOptions</code></td><td>M2</td></tr>
+            <tr><td><code>Extensions/{Data,String,CharacterSet}.swift</code> (252)</td><td><code>ReadOnlyMemory&lt;byte&gt;</code> / <code>string</code> extensions + charset helper</td><td>M3</td></tr>
+            <tr><td><code>XISFPropertyType.swift</code> (217) + 4 image enums (242)</td><td>enums (<code>XISFPropertyType</code>, <code>XISFSampleFormat</code>, <code>XISFColorSpace</code>, <code>XISFByteOrder</code>, <code>XISFPixelStorage</code>) + <code>XISFGeometry</code></td><td>M4</td></tr>
+            <tr><td><code>XISFValue.swift</code> (433)</td><td><code>readonly struct XISFValue</code> + <code>XISFValueKind</code></td><td>M5</td></tr>
+            <tr><td><code>XISFElement.swift</code> (106) + <code>XISFXMLParser.swift</code> (128)</td><td>internal <code>XISFElement</code> + <code>XISFXMLParser</code> (over <code>XmlReader</code>)</td><td>M6</td></tr>
+            <tr><td><code>XISFChecksum.swift</code> (222)</td><td><code>XISFChecksum</code> + <code>Algorithm</code></td><td>M7</td></tr>
+            <tr><td><code>XISFCompression.swift</code> (461)</td><td><code>XISFCompression</code> + <code>Codec</code>/<code>Subblock</code> (+ NuGet deps)</td><td>M8</td></tr>
+            <tr><td><code>XISFDataBlockLocation.swift</code> (247) + <code>XISFDataBlocksFile.swift</code> (169)</td><td><code>XISFDataBlockLocation</code> + internal <code>XISFDataBlocksFile</code></td><td>M9</td></tr>
+            <tr><td><code>XISFDataBlock.swift</code> (355)</td><td><code>XISFDataBlock</code></td><td>M10</td></tr>
+            <tr><td><code>XISFProperty.swift</code> (272) + <code>XISFFITSKeyword.swift</code> (87) + <code>XISFMetadata.swift</code> (72)</td><td><code>XISFProperty</code>, <code>XISFFITSKeyword</code>, <code>XISFMetadata</code></td><td>M11</td></tr>
+            <tr><td><code>Color/*.swift</code> (571) + <code>XISFResolution.swift</code> (128)</td><td><code>XISFICCProfile</code>, <code>XISFRGBWorkingSpace</code>, <code>XISFDisplayFunction</code>, <code>XISFColorFilterArray</code>, <code>XISFResolution</code></td><td>M12</td></tr>
+            <tr><td><code>XISFImage.swift</code> (283) + <code>XISFThumbnail.swift</code> (134)</td><td><code>XISFImage</code> + <code>XISFThumbnail</code></td><td>M13</td></tr>
+            <tr><td><code>XISFFile.swift</code> (335)</td><td><code>XISFFile</code> (consts in M1)</td><td>M14</td></tr>
+            <tr><td><code>Descriptions</code> + integration tests</td><td><code>ToString()</code> parity + finalization</td><td>M15</td></tr>
+        </tbody>
+    </table>
+    </div>
+
+    <!-- ============================ TABLE OF CONTENTS ============================ -->
+    <h2>Table of contents</h2>
+    <div class="toc">
+
+        <div class="phase">Phase 1 &middot; Foundations</div>
+        <ol>
+            <li><a href="#m1"><span class="num">M1</span> Project bootstrap, conventions &amp; constants</a> <span class="capsule status-completed">Completed</span></li>
+            <li><a href="#m2"><span class="num">M2</span> Errors &amp; parsing options</a> <span class="capsule status-not-started">Not started</span></li>
+            <li><a href="#m3"><span class="num">M3</span> Low-level helpers &amp; test infrastructure</a> <span class="capsule status-not-started">Not started</span></li>
+        </ol>
+
+        <div class="phase">Phase 2 &middot; Enums, values &amp; geometry</div>
+        <ol>
+            <li><a href="#m4"><span class="num">M4</span> Format enums &amp; geometry</a> <span class="capsule status-not-started">Not started</span></li>
+            <li><a href="#m5"><span class="num">M5</span> XISFValue</a> <span class="capsule status-not-started">Not started</span></li>
+        </ol>
+
+        <div class="phase">Phase 3 &middot; XML, checksums &amp; compression</div>
+        <ol>
+            <li><a href="#m6"><span class="num">M6</span> XML parser &mdash; XISFElement &amp; XISFXMLParser</a> <span class="capsule status-not-started">Not started</span></li>
+            <li><a href="#m7"><span class="num">M7</span> Checksums</a> <span class="capsule status-not-started">Not started</span></li>
+            <li><a href="#m8"><span class="num">M8</span> Compression</a> <span class="capsule status-not-started">Not started</span></li>
+        </ol>
+
+        <div class="phase">Phase 4 &middot; Data blocks, properties &amp; imaging</div>
+        <ol>
+            <li><a href="#m9"><span class="num">M9</span> Data-block location &amp; <code>.xisb</code> index</a> <span class="capsule status-not-started">Not started</span></li>
+            <li><a href="#m10"><span class="num">M10</span> XISFDataBlock</a> <span class="capsule status-not-started">Not started</span></li>
+            <li><a href="#m11"><span class="num">M11</span> Properties, keywords &amp; metadata</a> <span class="capsule status-not-started">Not started</span></li>
+            <li><a href="#m12"><span class="num">M12</span> Color &amp; ancillary elements</a> <span class="capsule status-not-started">Not started</span></li>
+            <li><a href="#m13"><span class="num">M13</span> XISFImage &amp; thumbnail</a> <span class="capsule status-not-started">Not started</span></li>
+        </ol>
+
+        <div class="phase">Phase 5 &middot; File, integration &amp; finalization</div>
+        <ol>
+            <li><a href="#m14"><span class="num">M14</span> XISFFile &mdash; entry point, preamble &amp; validation</a> <span class="capsule status-not-started">Not started</span></li>
+            <li><a href="#m15"><span class="num">M15</span> Descriptions, integration &amp; finalization</a> <span class="capsule status-not-started">Not started</span></li>
+        </ol>
+    </div>
+
+    <!-- ============================ MILESTONES ============================ -->
+    <h2>Milestones</h2>
+
+    <div class="phase-banner">Phase 1 &middot; Foundations</div>
+
+    <!-- M1 -->
+    <div class="milestone" id="m1">
+        <div class="m-head">
+            <h3>M1 &middot; Project bootstrap, conventions &amp; constants</h3>
+            <span class="capsule status-completed">Completed</span>
+        </div>
+        <div class="field">
+            <div class="label">Goal</div>
+            Confirm the existing scaffolding builds and the test harness runs, establish the project's structure and
+            conventions, and introduce the XISF preamble constants the rest of the port depends on &mdash; so every later
+            milestone has a green baseline.
+        </div>
+        <div class="field">
+            <div class="label">Tasks</div>
+            <ul class="tasks">
+                <li class="task">Verify <code>dotnet build DotNetXISF.slnx</code> and <code>dotnet test DotNetXISF.slnx</code> run green as-is in Debug <em>and</em> Release (net10.0, xUnit&nbsp;v3 on Microsoft.Testing.Platform, warnings-as-errors, nullable, overflow checks). <code>dotnet</code> lives at <code>/usr/local/share/dotnet/dotnet</code> (10.0.302); it is not on <code>PATH</code>.</li>
+                <li class="task">Establish the source-tree layout mirroring SwiftXISF's subfolders (<code>Core/</code>, <code>Checksum/</code>, <code>Color/</code>, <code>Compression/</code>, <code>DataBlock/</code>, <code>Extensions/</code>, <code>Image/</code>, <code>Model/</code>), one public type per file, flat <code>namespace DotNetXISF;</code>, and the MIT license header applied to every file.</li>
+                <li class="task">Add the repo-root <code>.editorconfig</code> raising the globalization analyzers (<code>CA1305</code>/<code>CA1304</code>/<code>CA1311</code>/<code>CA1310</code>/<code>CA1309</code>) to build errors, carried over from DotNetFITS.</li>
+                <li class="task">Create <code>Core/XISFFile.cs</code> holding only the preamble constants (<code>Signature = "XISF0100"</code>, <code>PreambleSize = 16</code>, <code>Namespace = "http://www.pixinsight.com/xisf"</code>); note the class is completed in M14.</li>
+                <li class="task">Confirm the <code>DotNetXISF</code> &rarr; <code>DotNetXISFTests</code> directory depth so <code>[ CallerFilePath ]</code> resolves the repo-root <code>Test Files/</code> (fixtures already present); add a minimal constants <code>[ Fact ]</code> so the harness runs a real test.</li>
+                <li class="task">Note: the two managed compression NuGet packages are added in M8, where first used &mdash; not here.</li>
+            </ul>
+        </div>
+        <div class="field"><div class="label">Status</div><span class="capsule status-completed">Completed</span></div>
+        <div class="field"><div class="label">Completed</div>2026-07-19</div>
+        <div class="field"><div class="label">Implementation notes</div>
+            <p>Implemented with TDD. Wrote a failing constants guard test first
+            (<code>DotNetXISFTests/Core/XISFFileTests.cs</code>), confirmed it failed to compile
+            (<code>XISFFile</code> did not yet exist), then made it green.</p>
+            <ul>
+                <li><strong>Baseline verified:</strong> the pre-existing scaffolding builds and tests green
+                    in Debug <em>and</em> Release (net10.0, xUnit&nbsp;v3 on Microsoft.Testing.Platform, warnings-as-errors,
+                    nullable, overflow checks). <code>dotnet</code> invoked at
+                    <code>/usr/local/share/dotnet/dotnet</code> (10.0.302).</li>
+                <li><strong>Constants:</strong> created <code>DotNetXISF/Core/XISFFile.cs</code> holding only the
+                    three preamble constants &mdash; <code>public const string Signature = "XISF0100"</code>,
+                    <code>public const int PreambleSize = 16</code>,
+                    <code>public const string Namespace = "http://www.pixinsight.com/xisf"</code>. Values
+                    cross-checked against the source project's <code>XISFFile</code>. The class is deliberately
+                    left non-<code>sealed</code> (matching the non-<code>final</code> original) and carries no
+                    <code>using</code> directives (none needed, avoiding an unused-import error under
+                    warnings-as-errors). It is completed in M14.</li>
+                <li><strong>.editorconfig:</strong> added the repo-root <code>.editorconfig</code> raising the
+                    globalization analyzers (<code>CA1305</code>/<code>CA1304</code>/<code>CA1311</code>/<code>CA1310</code>/<code>CA1309</code>)
+                    to build errors, carried over from the DotNetFITS precedent (identical bar the format-name wording).</li>
+                <li><strong>Layout &amp; conventions:</strong> established the <code>Core/</code> subfolder, one public
+                    type per file, flat <code>namespace DotNetXISF;</code> / <code>namespace DotNetXISFTests;</code>, MIT
+                    header on every file, and full XML doc comments on every type and member. The remaining
+                    SwiftXISF-mirrored subfolders (<code>Checksum/</code>, <code>Color/</code>, <code>Compression/</code>,
+                    <code>DataBlock/</code>, <code>Extensions/</code>, <code>Image/</code>, <code>Model/</code>) are created
+                    as each later milestone introduces its first type (git does not track empty directories).</li>
+                <li><strong>Test infrastructure depth:</strong> confirmed <code>DotNetXISFTests/</code> sits one level
+                    below the repo root, so a future <code>[ CallerFilePath ]</code>-based resolver reaches the repo-root
+                    <code>Test&nbsp;Files/</code> fixtures. <em>Note for the milestone that adds it:</em> the
+                    <code>TestUtilities</code> resolver must live at the <code>DotNetXISFTests/</code> <em>root</em> (not a
+                    subfolder) for the two-level parent walk to land on the repo root.</li>
+                <li><strong>Result:</strong> <code>dotnet build</code> clean (0 warnings, 0 errors) and
+                    <code>dotnet test</code> green (1 passed, 0 failed) in both Debug and Release.</li>
+            </ul>
+        </div>
+        <div class="field"><div class="label">Automated review</div>
+            <p>One review round (fresh-context sub-agent); converged immediately. <strong>No Critical/High/Medium
+            findings</strong> &mdash; the reviewer independently re-ran Debug/Release build+test (green, 0 warnings),
+            cross-checked the constant values against the source project, and verified style/structure against the
+            DotNetFITS precedent. Two <code>Info</code> advisories, both forward-looking (no action in M1):</p>
+            <ul>
+                <li><strong>CallerFilePath resolver placement</strong> (Info, Deferred) &mdash; the future
+                    <code>TestUtilities</code> resolver must sit at the <code>DotNetXISFTests/</code> root for the
+                    two-level parent walk to reach the repo-root <code>Test&nbsp;Files/</code>; recorded in the
+                    implementation notes above for the milestone that adds it.</li>
+                <li><strong>Mirrored subfolders not yet present</strong> (Info, Deferred) &mdash; only <code>Core/</code>
+                    exists so far; the others are created when their first type lands. Expected, not a defect.</li>
+            </ul>
+        </div>
+        <div class="field"><div class="label">Review comments</div><p class="placeholder">Awaiting human review.</p></div>
+    </div>
+
+    <!-- M2 -->
+    <div class="milestone" id="m2">
+        <div class="m-head">
+            <h3>M2 &middot; Errors &amp; parsing options</h3>
+            <span class="capsule status-not-started">Not started</span>
+        </div>
+        <div class="field">
+            <div class="label">Goal</div>
+            Port the leaf types every parser throws or is parameterized by &mdash; the exception type and the parsing
+            option set &mdash; with no dependencies, unblocking everything.
+        </div>
+        <div class="field">
+            <div class="label">Tasks</div>
+            <ul class="tasks">
+                <li class="task">Port <code>XISFError</code> &rarr; a <code>sealed XISFException : Exception</code> carrying an <code>XISFErrorKind</code> discriminator, with a <code>public static</code> factory per case &mdash; <code>InvalidFileUrl</code>, <code>CannotReadFile</code>, <code>InvalidSignature</code>, <code>InvalidHeaderLength</code>, <code>MalformedXml</code>, <code>InvalidElement</code>, <code>DataBlockError</code>, <code>DecompressionError</code>, <code>ChecksumMismatch</code>, <code>DataError</code>, <code>Unsupported</code> &mdash; each carrying its <code>reason</code>/payload and the XISF message text.</li>
+                <li class="task">Port <code>XISFParsingOptions</code> &rarr; a <code>[Flags]</code> enum (<code>VerifyChecksums</code>, <code>AllowExternalLocations</code>, <code>AllowSpecDeviations</code>) with <code>Strict = VerifyChecksums</code> and <code>Lenient = AllowSpecDeviations</code> presets and a <code>None = 0</code>.</li>
+                <li class="task">Port the error <code>description</code> test and the parsing-options tests (strict/lenient presets, raw-value round-trip).</li>
+                <li class="task">Full XML doc comments on every type and member, including the private constructor and internal factories.</li>
+            </ul>
+        </div>
+        <div class="field"><div class="label">Status</div><span class="capsule status-not-started">Not started</span></div>
+        <div class="field"><div class="label">Completed</div><span class="placeholder">&mdash;</span></div>
+        <div class="field"><div class="label">Implementation notes</div><p class="placeholder">To be filled in during implementation.</p></div>
+        <div class="field"><div class="label">Automated review</div><p class="placeholder">To be filled in during implementation.</p></div>
+        <div class="field"><div class="label">Review comments</div><p class="placeholder">Awaiting human review.</p></div>
+    </div>
+
+    <!-- M3 -->
+    <div class="milestone" id="m3">
+        <div class="m-head">
+            <h3>M3 &middot; Low-level helpers &amp; test infrastructure</h3>
+            <span class="capsule status-not-started">Not started</span>
+        </div>
+        <div class="field">
+            <div class="label">Goal</div>
+            Port the small byte/string helpers the parsers lean on, plus the shared test fixtures and the resource
+            resolver.
+        </div>
+        <div class="field">
+            <div class="label">Tasks</div>
+            <ul class="tasks">
+                <li class="task">Port <code>Extensions/Data.swift</code> &rarr; <code>ReadOnlyMemory&lt;byte&gt;</code>/<code>byte[]</code> extensions: <code>Bytes(at, count)</code>, <code>LittleEndianInteger&lt;T&gt;(at)</code> (via <code>BinaryPrimitives</code>), <code>MatchesAscii(at)</code> &mdash; offset/length based, with range guards.</li>
+                <li class="task">Port <code>Extensions/String.swift</code> &rarr; <code>string</code> extensions: <code>IsValidXisfIdentifier</code>, <code>XisfHexDecodedData()</code> (whitespace-ignoring, case-insensitive), <code>XisfBase64DecodedData()</code> (ignore-unknown-characters), throwing <code>XISFException</code> on malformed input.</li>
+                <li class="task">Port <code>Extensions/CharacterSet.swift</code> &rarr; an internal XISF-identifier character helper (start/body membership predicates over <code>char</code>).</li>
+                <li class="task">Port <code>TestError</code> (internal test-only exception with a factory) and <code>TestUtilities</code>: the <code>MonolithicFile(signature, headerLength, reserved, xml, attachment)</code> builder (16-byte preamble + UTF-8 XML + attachment, each field overridable), the <code>TestFiles</code> resolver via <code>[ CallerFilePath ]</code> filtering <code>*.xisf</code> ordinally, and the <code>RemoveTemporaryFile</code> helper.</li>
+                <li class="task">Port the extension self-tests and the <code>TestUtilities</code> self-tests (has-test-files, files-are-xisf, preamble/attachment assembly).</li>
+            </ul>
+        </div>
+        <div class="field"><div class="label">Status</div><span class="capsule status-not-started">Not started</span></div>
+        <div class="field"><div class="label">Completed</div><span class="placeholder">&mdash;</span></div>
+        <div class="field"><div class="label">Implementation notes</div><p class="placeholder">To be filled in during implementation.</p></div>
+        <div class="field"><div class="label">Automated review</div><p class="placeholder">To be filled in during implementation.</p></div>
+        <div class="field"><div class="label">Review comments</div><p class="placeholder">Awaiting human review.</p></div>
+    </div>
+
+    <div class="phase-banner">Phase 2 &middot; Enums, values &amp; geometry</div>
+
+    <!-- M4 -->
+    <div class="milestone" id="m4">
+        <div class="m-head">
+            <h3>M4 &middot; Format enums &amp; geometry</h3>
+            <span class="capsule status-not-started">Not started</span>
+        </div>
+        <div class="field">
+            <div class="label">Goal</div>
+            Port the near-mechanical format enumerations and the geometry value type they combine with &mdash; the typed
+            vocabulary the property and image layers are built on.
+        </div>
+        <div class="field">
+            <div class="label">Tasks</div>
+            <ul class="tasks">
+                <li class="task">Port <code>XISFPropertyType</code> (40 spec tokens: <code>boolean</code>, <code>int8</code>&ndash;<code>uint64</code>, <code>float32/64</code>, <code>complex32/64</code>, <code>string</code>, <code>timePoint</code>, <code>byteArray</code>, the 12 <code>*Vector</code> and 12 <code>*Matrix</code>) with its <code>Category</code> discriminator (<code>scalar</code>/<code>complex</code>/<code>string</code>/<code>timePoint</code>/<code>vector</code>/<code>matrix</code>) and raw-token parsing.</li>
+                <li class="task">Port the image enums with their spec raw values and defaults: <code>XISFSampleFormat</code> (<code>BytesPerSample</code>, <code>IsFloatingPoint</code>, <code>IsComplex</code>), <code>XISFColorSpace</code> (default <code>Gray</code>), <code>XISFByteOrder</code> (default <code>Little</code>), <code>XISFPixelStorage</code> (default <code>Planar</code>).</li>
+                <li class="task">Port <code>XISFGeometry</code> (<code>Dimensions</code>, <code>ChannelCount</code>, computed <code>PixelCount</code>/<code>SampleCount</code>) with invariant <code>d1:...:dN:channels</code> parsing and positivity checks.</li>
+                <li class="task">Port the corresponding tests (raw-value/spec, defaults, bytes-per-sample, category, geometry parse/reject) and the enum-description portions of the <code>Descriptions</code> suite that belong to these types.</li>
+            </ul>
+        </div>
+        <div class="field"><div class="label">Status</div><span class="capsule status-not-started">Not started</span></div>
+        <div class="field"><div class="label">Completed</div><span class="placeholder">&mdash;</span></div>
+        <div class="field"><div class="label">Implementation notes</div><p class="placeholder">To be filled in during implementation.</p></div>
+        <div class="field"><div class="label">Automated review</div><p class="placeholder">To be filled in during implementation.</p></div>
+        <div class="field"><div class="label">Review comments</div><p class="placeholder">Awaiting human review.</p></div>
+    </div>
+
+    <!-- M5 -->
+    <div class="milestone" id="m5">
+        <div class="m-head">
+            <h3>M5 &middot; XISFValue</h3>
+            <span class="capsule status-not-started">Not started</span>
+        </div>
+        <div class="field">
+            <div class="label">Goal</div>
+            Port the typed property value as a lean value type with exact equality/hashing and invariant-culture parsing
+            of every scalar kind.
+        </div>
+        <div class="field">
+            <div class="label">Tasks</div>
+            <ul class="tasks">
+                <li class="task">Port <code>XISFValue</code> &rarr; a <code>readonly struct</code> with an <code>XISFValueKind</code> discriminator, static factories and nullable typed accessors, holding the eight cases (boolean, <code>long</code>, <code>ulong</code>, <code>double</code>, complex real/imaginary, string, <code>DateTimeOffset</code>, <code>ReadOnlyMemory&lt;byte&gt;</code>).</li>
+                <li class="task">Implement <code>IEquatable&lt;XISFValue&gt;</code>, <code>==</code>/<code>!=</code> and <code>GetHashCode</code> with the Swift <code>NaN == NaN</code> quirk and value-equality over the data bytes.</li>
+                <li class="task">Port <code>Value(fromAttribute, type)</code> and the per-kind invariant parsers: boolean (<code>1</code>/<code>true</code>/<code>0</code>/<code>false</code>), width-range-checked signed/unsigned integers, float, complex <code>(re, im)</code>, and ISO&nbsp;8601 time-point (both fractional-second forms) &rarr; <code>DateTimeOffset</code>.</li>
+                <li class="task">Add a culture-swap test (<code>fr-FR</code>) over float/complex/time-point parsing; port the full <code>XISFValue</code> test suite (accessors, kind, equality/NaN, distinct hashing, each parse path, rejects-non-value-types), adapting only float-text expectations.</li>
+            </ul>
+        </div>
+        <div class="field"><div class="label">Status</div><span class="capsule status-not-started">Not started</span></div>
+        <div class="field"><div class="label">Completed</div><span class="placeholder">&mdash;</span></div>
+        <div class="field"><div class="label">Implementation notes</div><p class="placeholder">To be filled in during implementation.</p></div>
+        <div class="field"><div class="label">Automated review</div><p class="placeholder">To be filled in during implementation.</p></div>
+        <div class="field"><div class="label">Review comments</div><p class="placeholder">Awaiting human review.</p></div>
+    </div>
+
+    <div class="phase-banner">Phase 3 &middot; XML, checksums &amp; compression</div>
+
+    <!-- M6 -->
+    <div class="milestone" id="m6">
+        <div class="m-head">
+            <h3>M6 &middot; XML parser &mdash; XISFElement &amp; XISFXMLParser</h3>
+            <span class="capsule status-not-started">Not started</span>
+        </div>
+        <div class="field">
+            <div class="label">Goal</div>
+            Port the internal element tree and the namespace-aware XML parser that produces it &mdash; the shared
+            intermediate representation everything downstream parses from.
+        </div>
+        <div class="field">
+            <div class="label">Tasks</div>
+            <ul class="tasks">
+                <li class="task">Port <code>XISFElement</code> (internal): <code>Name</code>, <code>NamespaceUri</code>, <code>Attributes</code>, <code>Children</code> (private-set), <code>Content</code>/<code>TrimmedContent</code>, and <code>AppendChild</code>/<code>AppendContent</code>/<code>Children(named)</code>.</li>
+                <li class="task">Port <code>XISFXMLParser</code> (internal) over <code>System.Xml.XmlReader</code>: namespace-aware, local-name extraction, empty-namespace normalization, case-sensitive names, <code>DtdProcessing.Prohibit</code> and <code>XmlResolver = null</code>; a static <code>Parse(xml) : XISFElement</code> throwing <code>MalformedXml</code> on parse errors.</li>
+                <li class="task">Port the parser tests (element tree, nested children, default- and prefixed-namespace resolution to local names, no-namespace reporting, rejects-malformed-XML).</li>
+            </ul>
+        </div>
+        <div class="field"><div class="label">Status</div><span class="capsule status-not-started">Not started</span></div>
+        <div class="field"><div class="label">Completed</div><span class="placeholder">&mdash;</span></div>
+        <div class="field"><div class="label">Implementation notes</div><p class="placeholder">To be filled in during implementation.</p></div>
+        <div class="field"><div class="label">Automated review</div><p class="placeholder">To be filled in during implementation.</p></div>
+        <div class="field"><div class="label">Review comments</div><p class="placeholder">Awaiting human review.</p></div>
+    </div>
+
+    <!-- M7 -->
+    <div class="milestone" id="m7">
+        <div class="m-head">
+            <h3>M7 &middot; Checksums</h3>
+            <span class="capsule status-not-started">Not started</span>
+        </div>
+        <div class="field">
+            <div class="label">Goal</div>
+            Port data-block digest parsing and verification, with SHA-3 gated by platform availability.
+        </div>
+        <div class="field">
+            <div class="label">Tasks</div>
+            <ul class="tasks">
+                <li class="task">Port <code>XISFChecksum</code> with its nested <code>Algorithm</code> (<code>Sha1</code>, <code>Sha256</code>, <code>Sha512</code>, <code>Sha3_256</code>, <code>Sha3_512</code>), case-insensitive hyphen-variant name parsing, and the <code>algorithm:digest</code> attribute parser.</li>
+                <li class="task">Compute digests over the stored (compressed) bytes with <code>System.Security.Cryptography</code>: <code>SHA1</code>/<code>SHA256</code>/<code>SHA512</code> always; for SHA-3, guard on <code>SHA3_256.IsSupported</code>/<code>SHA3_512.IsSupported</code> and throw <code>XISFException.Unsupported</code> when absent (Q2).</li>
+                <li class="task">Implement <code>Matches</code>/<code>Verify</code> with lowercased hex comparison and invariant <code>x2</code> hex formatting.</li>
+                <li class="task">Port the checksum tests (parse, aliases, reject-unknown/malformed, SHA-1/256/512 matches, SHA-3 match adapted for availability, mismatch throws, verify success), reusing the static fixture header block.</li>
+            </ul>
+        </div>
+        <div class="field"><div class="label">Status</div><span class="capsule status-not-started">Not started</span></div>
+        <div class="field"><div class="label">Completed</div><span class="placeholder">&mdash;</span></div>
+        <div class="field"><div class="label">Implementation notes</div><p class="placeholder">To be filled in during implementation.</p></div>
+        <div class="field"><div class="label">Automated review</div><p class="placeholder">To be filled in during implementation.</p></div>
+        <div class="field"><div class="label">Review comments</div><p class="placeholder">Awaiting human review.</p></div>
+    </div>
+
+    <!-- M8 -->
+    <div class="milestone" id="m8">
+        <div class="m-head">
+            <h3>M8 &middot; Compression</h3>
+            <span class="capsule status-not-started">Not started</span>
+        </div>
+        <div class="field">
+            <div class="label">Goal</div>
+            Port the compression-attribute grammar and the full decode pipeline across all four codecs, with byte-shuffling
+            and sub-blocks &mdash; the port's single largest and most interop-sensitive type.
+        </div>
+        <div class="field">
+            <div class="label">Tasks</div>
+            <ul class="tasks">
+                <li class="task">Add the two managed NuGet package references to <code>DotNetXISF.csproj</code>: <code>K4os.Compression.LZ4</code> and <code>ZstdSharp.Port</code> (Q1). Keep <code>ci-win.yaml</code> and the <code>.slnx</code> consistent.</li>
+                <li class="task">Port <code>XISFCompression</code> with nested <code>Codec</code> (<code>zlib</code>/<code>lz4</code>/<code>lz4hc</code>/<code>zstd</code>) and <code>Subblock</code>; parse the <code>&lt;codec&gt;[+sh]:&lt;uncompressed-size&gt;[:&lt;item-size&gt;]</code> attribute and the <code>subblocks</code> list invariantly.</li>
+                <li class="task">Implement <code>Decompress(input)</code>: zlib via <code>ZLibStream</code> (RFC&nbsp;1950 wrapper handled directly), lz4/lz4hc via <code>LZ4Codec.Decode</code> into the declared size, zstd via <code>ZstdSharp.Decompressor.Unwrap</code> into the declared size; validate the decoded length.</li>
+                <li class="task">Port <code>byteUnshuffle</code> exactly (whole-item region reindex, trailing partial item untouched) and the sub-block path (decode each stream to its declared size, concatenate, length-check the total).</li>
+                <li class="task">Copy the verbatim hex-encoded compressed-stream fixtures and port all compression tests (codec/shuffle/subblock parsing, decompress per codec, shuffle at item-sizes 2/4, subblocks, throws on short/corrupt stream, throws on size mismatch).</li>
+            </ul>
+        </div>
+        <div class="field"><div class="label">Status</div><span class="capsule status-not-started">Not started</span></div>
+        <div class="field"><div class="label">Completed</div><span class="placeholder">&mdash;</span></div>
+        <div class="field"><div class="label">Implementation notes</div><p class="placeholder">To be filled in during implementation.</p></div>
+        <div class="field"><div class="label">Automated review</div><p class="placeholder">To be filled in during implementation.</p></div>
+        <div class="field"><div class="label">Review comments</div><p class="placeholder">Awaiting human review.</p></div>
+    </div>
+
+    <div class="phase-banner">Phase 4 &middot; Data blocks, properties &amp; imaging</div>
+
+    <!-- M9 -->
+    <div class="milestone" id="m9">
+        <div class="m-head">
+            <h3>M9 &middot; Data-block location &amp; <code>.xisb</code> index</h3>
+            <span class="capsule status-not-started">Not started</span>
+        </div>
+        <div class="field">
+            <div class="label">Goal</div>
+            Port the model of where a block's bytes live and the external distributed-block index reader.
+        </div>
+        <div class="field">
+            <div class="label">Tasks</div>
+            <ul class="tasks">
+                <li class="task">Port <code>XISFDataBlockLocation</code> with nested <code>Encoding</code> (<code>base64</code>/<code>hex</code>) and cases <code>Inline</code>, <code>Embedded</code>, <code>Attachment(position, size)</code>, <code>Url(uri, indexId)</code>, <code>AbsolutePath(path, indexId)</code>, <code>HeaderRelativePath(path, indexId)</code>; the <code>location</code> attribute parser (external <code>url(...)</code>/<code>path(...)</code>, <code>@header_dir/</code> prefix, parentheses in resource), and <code>IsExternal</code>.</li>
+                <li class="task">Port the trailing index-id parser (decimal or <code>0x</code> hex <code>UInt64</code>), invariant.</li>
+                <li class="task">Port <code>XISFDataBlocksFile</code> (internal): the <code>XISB0100</code> signature, 16-byte header, linked-list node walk over 40-byte elements with little-endian fields, cycle detection (visited set), and <code>Block(withId, in)</code>.</li>
+                <li class="task">Port the location tests (inline/embedded/attachment/url/path parsing, parentheses, external detection, malformed rejection) and the synthetic-index builders needed by M10's external tests.</li>
+            </ul>
+        </div>
+        <div class="field"><div class="label">Status</div><span class="capsule status-not-started">Not started</span></div>
+        <div class="field"><div class="label">Completed</div><span class="placeholder">&mdash;</span></div>
+        <div class="field"><div class="label">Implementation notes</div><p class="placeholder">To be filled in during implementation.</p></div>
+        <div class="field"><div class="label">Automated review</div><p class="placeholder">To be filled in during implementation.</p></div>
+        <div class="field"><div class="label">Review comments</div><p class="placeholder">Awaiting human review.</p></div>
+    </div>
+
+    <!-- M10 -->
+    <div class="milestone" id="m10">
+        <div class="m-head">
+            <h3>M10 &middot; XISFDataBlock</h3>
+            <span class="capsule status-not-started">Not started</span>
+        </div>
+        <div class="field">
+            <div class="label">Goal</div>
+            Port the byte-resolving, lazily-decoding block that backs images, thumbnails, ICC profiles and data-backed
+            property values &mdash; tying together location, checksum and compression.
+        </div>
+        <div class="field">
+            <div class="label">Tasks</div>
+            <ul class="tasks">
+                <li class="task">Port <code>XISFDataBlock</code>: capture <code>Location</code>, optional <code>Compression</code>, <code>Checksum</code>, raw byte-order, options and base URL; resolve inline (base64/hex), embedded (<code>&lt;Data&gt;</code> child) and attachment (absolute-offset slice) bytes.</li>
+                <li class="task">Implement the lazy cached resolve/decode that stores success <em>and</em> failure (no retry), with checksum verification (when enabled) over the stored bytes <em>before</em> decompression, then decompression.</li>
+                <li class="task">Implement external resolution (opt-in via <code>allowExternalLocations</code>, lazy, local-only, remote URLs rejected) delegating to <code>XISFDataBlocksFile</code> for indexed <code>.xisb</code> blocks; expose throwing <code>RawBytes</code>/<code>Data</code>/<code>UncompressedSize</code> and <code>ToString()</code>.</li>
+                <li class="task">Port the data-block tests (inline/embedded/attachment resolution and rejections, raw-attribute capture, embedded compression/checksum from the <code>&lt;Data&gt;</code> child, decompresses/equals-raw, corrupt-stream throws, checksum verify/mismatch/skip) and the external-data-block tests (absolute/header-relative whole-file, <code>.xisb</code>-by-index, unknown-index, disabled-resolution, missing-file, no-base-URL, remote-URL rejection, unknown uncompressed size) with temp files and <code>try/finally</code> cleanup.</li>
+            </ul>
+        </div>
+        <div class="field"><div class="label">Status</div><span class="capsule status-not-started">Not started</span></div>
+        <div class="field"><div class="label">Completed</div><span class="placeholder">&mdash;</span></div>
+        <div class="field"><div class="label">Implementation notes</div><p class="placeholder">To be filled in during implementation.</p></div>
+        <div class="field"><div class="label">Automated review</div><p class="placeholder">To be filled in during implementation.</p></div>
+        <div class="field"><div class="label">Review comments</div><p class="placeholder">Awaiting human review.</p></div>
+    </div>
+
+    <!-- M11 -->
+    <div class="milestone" id="m11">
+        <div class="m-head">
+            <h3>M11 &middot; Properties, keywords &amp; metadata</h3>
+            <span class="capsule status-not-started">Not started</span>
+        </div>
+        <div class="field">
+            <div class="label">Goal</div>
+            Port the typed property model, embedded FITS keywords and the unit metadata bag, with the strict/lenient
+            drop-vs-throw behavior threaded through.
+        </div>
+        <div class="field">
+            <div class="label">Tasks</div>
+            <ul class="tasks">
+                <li class="task">Port <code>XISFProperty</code> (<code>Id</code>, <code>Type</code>, <code>Value</code>, optional <code>Comment</code>/<code>Format</code>/<code>Length</code>/<code>Rows</code>/<code>Columns</code>) with the element initializer dispatching on <code>Type.Category</code>: scalar/complex/time-point via <code>XISFValue</code>, string via inline content or a data-block-decoded UTF-8 string, vector/matrix/byteArray via an <code>XISFDataBlock</code> into <code>Value.Data</code>.</li>
+                <li class="task">Port <code>ParseList</code> (lenient skips malformed) and identifier validation.</li>
+                <li class="task">Port <code>XISFFITSKeyword</code> (<code>Name</code>, optional <code>Value</code>/<code>Comment</code>, empty value &rarr; null, name length/charset validated per options) and <code>XISFMetadata</code> (<code>Properties</code> bag + id subscript delegating to <code>ParseList</code>).</li>
+                <li class="task">Port the property, property-type, FITS-keyword and metadata tests (scalar/string/vector/matrix/byteArray/data-block-string parsing, rejections, option-gated identifier/name validation, category).</li>
+            </ul>
+        </div>
+        <div class="field"><div class="label">Status</div><span class="capsule status-not-started">Not started</span></div>
+        <div class="field"><div class="label">Completed</div><span class="placeholder">&mdash;</span></div>
+        <div class="field"><div class="label">Implementation notes</div><p class="placeholder">To be filled in during implementation.</p></div>
+        <div class="field"><div class="label">Automated review</div><p class="placeholder">To be filled in during implementation.</p></div>
+        <div class="field"><div class="label">Review comments</div><p class="placeholder">Awaiting human review.</p></div>
+    </div>
+
+    <!-- M12 -->
+    <div class="milestone" id="m12">
+        <div class="m-head">
+            <h3>M12 &middot; Color &amp; ancillary elements</h3>
+            <span class="capsule status-not-started">Not started</span>
+        </div>
+        <div class="field">
+            <div class="label">Goal</div>
+            Port the per-image color and ancillary metadata elements that hang off an <code>&lt;Image&gt;</code>.
+        </div>
+        <div class="field">
+            <div class="label">Tasks</div>
+            <ul class="tasks">
+                <li class="task">Port <code>XISFICCProfile</code> (wraps an <code>XISFDataBlock</code>; throwing <code>Data</code> of opaque big-endian ICC bytes; rejects missing location).</li>
+                <li class="task">Port <code>XISFRGBWorkingSpace</code> (nested <code>Primaries</code>, <code>Gamma</code> as <code>exponent(double)</code>/<code>sRGB</code>; invariant triplet and gamma parsing, case-insensitive sRGB).</li>
+                <li class="task">Port <code>XISFDisplayFunction</code> (nested <code>Components</code>; midtones/shadows/highlights/expansion vectors, component-count validation) and <code>XISFColorFilterArray</code> (nested <code>Element</code> character enum; pattern/width/height, computed <code>Elements</code>, pattern-length and character validation when strict).</li>
+                <li class="task">Port <code>XISFResolution</code> (nested <code>Unit</code> <code>inch</code>/<code>cm</code> with default; horizontal/vertical/unit; invariant parsing; positivity and unknown-unit handling per options).</li>
+                <li class="task">Port the color tests (RGB working space, display function, ICC profile, CFA, resolution parsing and strict/lenient rejections) and their description cases.</li>
+            </ul>
+        </div>
+        <div class="field"><div class="label">Status</div><span class="capsule status-not-started">Not started</span></div>
+        <div class="field"><div class="label">Completed</div><span class="placeholder">&mdash;</span></div>
+        <div class="field"><div class="label">Implementation notes</div><p class="placeholder">To be filled in during implementation.</p></div>
+        <div class="field"><div class="label">Automated review</div><p class="placeholder">To be filled in during implementation.</p></div>
+        <div class="field"><div class="label">Review comments</div><p class="placeholder">Awaiting human review.</p></div>
+    </div>
+
+    <!-- M13 -->
+    <div class="milestone" id="m13">
+        <div class="m-head">
+            <h3>M13 &middot; XISFImage &amp; thumbnail</h3>
+            <span class="capsule status-not-started">Not started</span>
+        </div>
+        <div class="field">
+            <div class="label">Goal</div>
+            Port the parsed <code>&lt;Image&gt;</code> with its typed metadata, lazy pixel bytes and optional ancillary
+            children, plus the thumbnail that wraps a nested image.
+        </div>
+        <div class="field">
+            <div class="label">Tasks</div>
+            <ul class="tasks">
+                <li class="task">Port <code>XISFImage</code>: <code>Geometry</code>, <code>SampleFormat</code>, <code>ColorSpace</code>, <code>PixelStorage</code>, <code>ByteOrder</code>, optional <code>Bounds</code>/<code>ImageType</code>/<code>Orientation</code>/<code>Id</code>/<code>Uuid</code>, nested <code>Properties</code>/<code>Keywords</code>, the optional color/ancillary children (ICC, RGB working space, display function, CFA, resolution, thumbnail), and the pixel <code>XISFDataBlock</code> exposing throwing <code>Data</code>.</li>
+                <li class="task">Implement the strict validations (float image requires <code>bounds</code>; declared pixel byte-count consistent with geometry) and the generic enumerated-value fallback (unknown raw value &rarr; default when lenient, throw when strict), plus the drop-vs-throw handling of malformed child metadata.</li>
+                <li class="task">Port <code>XISFThumbnail</code> (wraps a nested <code>XISFImage</code>; throwing <code>Data</code>; validates 2D, UInt8/16, Gray/RGB, no bounds/CFA/nested thumbnail).</li>
+                <li class="task">Port the image and thumbnail tests (gray/RGB/float parsing, defaults, planar/normal storage, bounds requirement strict/lenient, pixel-size mismatch, identity attributes, nested properties/keywords, child-metadata attach/drop, thumbnail parse and strict rejections).</li>
+            </ul>
+        </div>
+        <div class="field"><div class="label">Status</div><span class="capsule status-not-started">Not started</span></div>
+        <div class="field"><div class="label">Completed</div><span class="placeholder">&mdash;</span></div>
+        <div class="field"><div class="label">Implementation notes</div><p class="placeholder">To be filled in during implementation.</p></div>
+        <div class="field"><div class="label">Automated review</div><p class="placeholder">To be filled in during implementation.</p></div>
+        <div class="field"><div class="label">Review comments</div><p class="placeholder">Awaiting human review.</p></div>
+    </div>
+
+    <div class="phase-banner">Phase 5 &middot; File, integration &amp; finalization</div>
+
+    <!-- M14 -->
+    <div class="milestone" id="m14">
+        <div class="m-head">
+            <h3>M14 &middot; XISFFile &mdash; entry point, preamble &amp; validation</h3>
+            <span class="capsule status-not-started">Not started</span>
+        </div>
+        <div class="field">
+            <div class="label">Goal</div>
+            Complete the single public entry point: validate the binary preamble and XML header, and expose the parsed
+            images, properties, keywords and metadata.
+        </div>
+        <div class="field">
+            <div class="label">Tasks</div>
+            <ul class="tasks">
+                <li class="task">Complete <code>XISFFile</code>: validate the 16-byte preamble (ASCII <code>XISF0100</code> signature, little-endian <code>UInt32</code> header length at offset&nbsp;8, 4-byte reserved &mdash; non-zero rejected unless lenient, length must lie within the file), parse the UTF-8 XML header via <code>XISFXMLParser</code>, and validate the root (<code>xisf</code> in the XISF namespace or no namespace; <code>version="1.0"</code> required unless lenient).</li>
+                <li class="task">Populate <code>Properties</code>, <code>Keywords</code>, <code>Images</code> and optional <code>Metadata</code> from the element tree; expose the <code>[id]</code> subscript, <code>Keywords(named)</code>, <code>HeaderElementNames</code> and <code>ToString()</code>.</li>
+                <li class="task">Provide the path and byte-buffer constructors (<code>File.ReadAllBytes</code>; failure classified missing/directory &rarr; <code>InvalidFileUrl</code> else <code>CannotReadFile</code>) and the internal base-URL constructor for external resolution.</li>
+                <li class="task">Port the <code>XISFFile</code> tests (35): preamble validity/rejections, strict/lenient reserved &amp; version, header-length bounds, reads-from-path, external-image resolution gating, top-level element names, properties/keywords/images/metadata exposure, wrong-root/namespace, non-namespaced header, malformed-XML &mdash; plus the sample-fixture tests (<code>ParsesAllTestFiles</code>, consistent geometry, and the autocrop/corrected fixture assertions) against the two repo-root <code>.xisf</code> files.</li>
+            </ul>
+        </div>
+        <div class="field"><div class="label">Status</div><span class="capsule status-not-started">Not started</span></div>
+        <div class="field"><div class="label">Completed</div><span class="placeholder">&mdash;</span></div>
+        <div class="field"><div class="label">Implementation notes</div><p class="placeholder">To be filled in during implementation.</p></div>
+        <div class="field"><div class="label">Automated review</div><p class="placeholder">To be filled in during implementation.</p></div>
+        <div class="field"><div class="label">Review comments</div><p class="placeholder">Awaiting human review.</p></div>
+    </div>
+
+    <!-- M15 -->
+    <div class="milestone" id="m15">
+        <div class="m-head">
+            <h3>M15 &middot; Descriptions, integration &amp; finalization</h3>
+            <span class="capsule status-not-started">Not started</span>
+        </div>
+        <div class="field">
+            <div class="label">Goal</div>
+            Bring the port to a shippable state: full <code>ToString()</code> parity, end-to-end coverage, a clean build in
+            both configurations, an updated README and CI parity.
+        </div>
+        <div class="field">
+            <div class="label">Tasks</div>
+            <ul class="tasks">
+                <li class="task">Port the <code>Descriptions</code> suite (every public type's <code>ToString()</code>), including the synthetic rich-file builder exercising every ancillary element, and confirm each type's <code>ToString()</code> is in place.</li>
+                <li class="task">Confirm every file under the repo-root <code>Test Files/</code> parses, and cross-check overall parity against the Swift suite (~226 tests).</li>
+                <li class="task">Build Debug + Release with zero warnings (warnings-as-errors, nullable, overflow, docs generated); confirm no <code>TODO</code>/<code>NotImplemented</code> remain; run <code>dotnet test</code> green in both configurations.</li>
+                <li class="task">Update <code>README.md</code> to the maintainer's template (About, Status &mdash; read-only, Conformance &amp; Limitations mirroring SwiftXISF's list, Requirements noting the two managed dependencies and .NET&nbsp;10, Building, compile-verified Example Usage), described purely on its own terms &mdash; no reference to SwiftXISF/Swift.</li>
+                <li class="task">Confirm <code>DotNetXISF.slnx</code>, both <code>.csproj</code> files and <code>ci-win.yaml</code> are consistent and the Windows CI passes in Debug and Release.</li>
+            </ul>
+        </div>
+        <div class="field"><div class="label">Status</div><span class="capsule status-not-started">Not started</span></div>
+        <div class="field"><div class="label">Completed</div><span class="placeholder">&mdash;</span></div>
+        <div class="field"><div class="label">Implementation notes</div><p class="placeholder">To be filled in during implementation.</p></div>
+        <div class="field"><div class="label">Automated review</div><p class="placeholder">To be filled in during implementation.</p></div>
+        <div class="field"><div class="label">Review comments</div><p class="placeholder">Awaiting human review.</p></div>
+    </div>
+
+    <!-- ============================ APPENDIX ============================ -->
+    <h2 id="appendix">Appendix</h2>
+
+    <h3>Dependency order</h3>
+    <pre><code>constants (M1)
+ &rarr; XISFException, XISFParsingOptions (M2)
+  &rarr; byte/string/charset helpers, test utils (M3)
+   &rarr; format enums + XISFGeometry (M4)
+    &rarr; XISFValue (M5)
+   &rarr; XISFElement + XISFXMLParser (M6)
+    &rarr; XISFChecksum (M7)
+    &rarr; XISFCompression (M8)   [+ K4os.Compression.LZ4, ZstdSharp.Port]
+     &rarr; XISFDataBlockLocation + XISFDataBlocksFile (M9)
+      &rarr; XISFDataBlock (M10)          [needs location, checksum, compression]
+       &rarr; XISFProperty / FITSKeyword / Metadata (M11)   [needs value, data block]
+       &rarr; Color &amp; ancillary + XISFResolution (M12)      [needs data block]
+        &rarr; XISFImage + XISFThumbnail (M13)               [needs geometry, enums, data block, property, color]
+         &rarr; XISFFile (M14)                                [needs XML parser, image, property, metadata]
+          &rarr; descriptions, integration, finalization (M15)</code></pre>
+    <p>Two multi-type Swift files are split across milestones only where a later type is never referenced by earlier code:
+        <code>XISFFile</code> is created as constants in M1 and completed in M14. Otherwise each milestone ports whole
+        types, grouped by the layer they belong to.</p>
+
+    <h3>swift-testing &rarr; xUnit v3</h3>
+    <div class="table-scroll">
+    <table>
+        <thead><tr><th>swift-testing</th><th>xUnit v3</th></tr></thead>
+        <tbody>
+            <tr><td><code>@Test func foo()</code></td><td><code>[ Fact ] public void Foo()</code></td></tr>
+            <tr><td><code>struct Test_XISFFoo</code></td><td><code>public class XISFFooTests</code></td></tr>
+            <tr><td><code>#expect(x)</code></td><td><code>Assert.True(x)</code></td></tr>
+            <tr><td><code>#expect(a == b)</code></td><td><code>Assert.Equal(b, a)</code></td></tr>
+            <tr><td><code>try #require(x)</code></td><td><code>Assert.NotNull(x)</code> then use</td></tr>
+            <tr><td><code>try #require(throws: XISFError.self){ }</code></td><td><code>Assert.Throws&lt;XISFException&gt;(() =&gt; ...)</code></td></tr>
+            <tr><td><code>#expect(throws: Never.self){ }</code></td><td>call directly (test fails if it throws)</td></tr>
+            <tr><td>loop with <code>.forEach { #expect(...) }</code></td><td>one <code>[ Fact ]</code> with an internal loop (no <code>[ Theory ]</code>)</td></tr>
+            <tr><td><code>@testable import SwiftXISF</code></td><td><code>using DotNetXISF;</code> + <code>InternalsVisibleTo</code></td></tr>
+            <tr><td><code>#filePath</code></td><td><code>[ CallerFilePath ]</code></td></tr>
+            <tr><td><code>defer { try? FileManager.removeItem }</code></td><td><code>try/finally</code> + <code>RemoveTemporaryFile</code></td></tr>
+            <tr><td><code>async throws</code> tests</td><td>synchronous <code>void</code> tests</td></tr>
+        </tbody>
+    </table>
+    </div>
+
+    <h3>Build &amp; test commands</h3>
+    <pre><code># dotnet is not on PATH; it lives here (10.0.302):
+/usr/local/share/dotnet/dotnet build DotNetXISF.slnx -c Debug
+/usr/local/share/dotnet/dotnet build DotNetXISF.slnx -c Release
+/usr/local/share/dotnet/dotnet test  DotNetXISF.slnx -c Debug
+/usr/local/share/dotnet/dotnet test  DotNetXISF.slnx -c Release</code></pre>
+
+    <div class="footer">
+        Generated 2026-07-18 &middot; Living document &mdash; the implement command updates each milestone's Status,
+        Completed date, Implementation notes, Automated review and Review comments in place.
+    </div>
+
+</div>
+</body>
+</html>
