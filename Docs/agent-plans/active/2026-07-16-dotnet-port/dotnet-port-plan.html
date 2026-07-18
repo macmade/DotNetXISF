@@ -376,7 +376,7 @@
         <ol>
             <li><a href="#m1"><span class="num">M1</span> Project bootstrap, conventions &amp; constants</a> <span class="capsule status-completed">Completed</span></li>
             <li><a href="#m2"><span class="num">M2</span> Errors &amp; parsing options</a> <span class="capsule status-completed">Completed</span></li>
-            <li><a href="#m3"><span class="num">M3</span> Low-level helpers &amp; test infrastructure</a> <span class="capsule status-not-started">Not started</span></li>
+            <li><a href="#m3"><span class="num">M3</span> Low-level helpers &amp; test infrastructure</a> <span class="capsule status-completed">Completed</span></li>
         </ol>
 
         <div class="phase">Phase 2 &middot; Enums, values &amp; geometry</div>
@@ -580,7 +580,7 @@
     <div class="milestone" id="m3">
         <div class="m-head">
             <h3>M3 &middot; Low-level helpers &amp; test infrastructure</h3>
-            <span class="capsule status-not-started">Not started</span>
+            <span class="capsule status-completed">Completed</span>
         </div>
         <div class="field">
             <div class="label">Goal</div>
@@ -597,10 +597,64 @@
                 <li class="task">Port the extension self-tests and the <code>TestUtilities</code> self-tests (has-test-files, files-are-xisf, preamble/attachment assembly).</li>
             </ul>
         </div>
-        <div class="field"><div class="label">Status</div><span class="capsule status-not-started">Not started</span></div>
-        <div class="field"><div class="label">Completed</div><span class="placeholder">&mdash;</span></div>
-        <div class="field"><div class="label">Implementation notes</div><p class="placeholder">To be filled in during implementation.</p></div>
-        <div class="field"><div class="label">Automated review</div><p class="placeholder">To be filled in during implementation.</p></div>
+        <div class="field"><div class="label">Status</div><span class="capsule status-completed">Completed</span></div>
+        <div class="field"><div class="label">Completed</div>2026-07-19</div>
+        <div class="field"><div class="label">Implementation notes</div>
+            <p>Implemented with TDD. Wrote the extension and test-infrastructure self-tests first, confirmed they failed
+            to compile, then implemented the helpers to green. All library helpers live under <code>Extensions/</code>,
+            mirroring the source layout; <code>TestUtilities.cs</code> and <code>TestError.cs</code> sit at the
+            <code>DotNetXISFTests/</code> root (per M1's advisory) so the resolver's two-level
+            <code>[ CallerFilePath ]</code> walk reaches the repo-root <code>Test&nbsp;Files/</code>.</p>
+            <ul>
+                <li><strong><code>ByteMemoryExtensions</code>:</strong> <code>Bytes(offset, count)</code> (bounds/negative
+                    guards, widened to <code>long</code> for the end check so a pathological <code>offset + count</code>
+                    cannot <code>OverflowException</code> under <code>CheckForOverflowUnderflow</code> &mdash; it still
+                    throws <code>DataError</code>); <code>LittleEndianInteger&lt;T&gt;(offset)</code> as an idiomatic
+                    generic over <code>unmanaged, IBinaryInteger&lt;T&gt;, IMinMaxValue&lt;T&gt;</code> using
+                    <code>Unsafe.SizeOf&lt;T&gt;()</code> and <code>T.ReadLittleEndian</code> (the generic form of
+                    <code>BinaryPrimitives</code>), with <code>isUnsigned</code> derived from
+                    <code>T.IsZero( T.MinValue )</code>; <code>MatchesAscii(value, offset)</code> guarding with
+                    <code>Ascii.IsValid</code> so non-ASCII strings never match.</li>
+                <li><strong><code>StringExtensions</code>:</strong> <code>IsValidXisfIdentifier()</code>,
+                    <code>XisfHexDecodedData()</code> (whitespace-ignoring, upper/lowercase, odd-length and non-hex
+                    rejection via a sentinel <code>HexDigitValue</code> helper), and <code>XisfBase64DecodedData()</code>
+                    (pre-filters to the base64 alphabet then <code>Convert.FromBase64String</code>, reproducing
+                    Foundation's ignore-unknown-characters for the header-wrapping case). All throw <code>XISFException</code>
+                    on malformed input.</li>
+                <li><strong><code>XISFCharacterSet</code> (internal):</strong> <code>IsIdentifierStart</code>/
+                    <code>IsIdentifierBody</code> <code>char</code> predicates over compile-time constant character sets;
+                    reachable from tests via <code>InternalsVisibleTo</code>.</li>
+                <li><strong>Test infrastructure:</strong> <code>TestError</code> (internal sealed, private ctor + factory),
+                    and <code>TestUtilities</code> with the <code>MonolithicFile(signature, headerLength, reserved, xml,
+                    attachment)</code> builder (16-byte preamble via <code>BinaryPrimitives.WriteUInt32LittleEndian</code>
+                    + UTF-8 XML + attachment, each field overridable), the <code>TestFiles</code> resolver
+                    (<code>[ CallerFilePath ]</code>, recursive <code>*.xisf</code>, ordinal sort), and the
+                    <code>internal RemoveTemporaryFile</code> cleanup helper (kept internal to avoid xUnit's
+                    <code>xUnit1013</code>).</li>
+                <li><strong>Scoping note:</strong> the source's monolithic-file self-tests also parse the bytes with
+                    <code>XISFFile(data:options:)</code> and assert <code>headerXML</code>; since parsing does not exist
+                    until M14, M3's self-tests verify only byte-level preamble/attachment assembly, deferring the
+                    parse-based assertions to M14.</li>
+                <li><strong>Result:</strong> <code>dotnet build</code> clean (0 warnings, 0 errors) and
+                    <code>dotnet test</code> green (24 passed, 0 failed) in both Debug and Release; no M1/M2 regression.</li>
+            </ul>
+        </div>
+        <div class="field"><div class="label">Automated review</div>
+            <p>One review round (fresh-context sub-agent); converged immediately. <strong>No Critical/High/Medium
+            findings.</strong> The reviewer independently rebuilt/re-ran both configs (24/24 pass, 0 warnings), verified
+            every helper's behavior against the source, confirmed the re-based-slice offsets and the generic LE decoder,
+            and confirmed the resolver reaches the repo-root fixtures with no M1/M2 regression. Two <code>Info</code>
+            observations, neither requiring action:</p>
+            <ul>
+                <li><strong>Base64 pre-filter edge parity</strong> (Info, Deferred) &mdash; handling of a <em>misplaced</em>
+                    <code>=</code> may differ from Foundation at the exact edge, but for all well-formed and
+                    whitespace-wrapped XISF content (the only contracted inputs) behavior is identical, and both reject the
+                    tested malformed input.</li>
+                <li><strong><code>MatchesAscii</code> non-ASCII branch not directly asserted</strong> (Info, Deferred)
+                    &mdash; the guard is exercised only indirectly; a faithful port (the source test omits it too). A
+                    one-line <code>Assert.False( data.MatchesAscii( "caf&eacute;", 0 ) )</code> would pin it if desired.</li>
+            </ul>
+        </div>
         <div class="field"><div class="label">Review comments</div><p class="placeholder">Awaiting human review.</p></div>
     </div>
 
