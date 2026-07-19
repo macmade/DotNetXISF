@@ -9,8 +9,29 @@
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
   </PropertyGroup>
 
+  <PropertyGroup>
+    <PackageId>DotNetXISF</PackageId>
+    <Version>1.0.0</Version>
+    <Authors>Jean-David Gadina</Authors>
+    <Company>XS-Labs</Company>
+    <Description>XISF Image Library for C# / .NET — read XISF files based on the XISF 1.0 specification.</Description>
+    <PackageTags>XISF;astronomy;image;xisf-1.0;pixinsight;io</PackageTags>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/macmade/DotNetXISF</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/macmade/DotNetXISF</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <Copyright>© 2026 Jean-David Gadina - www.xs-labs.com</Copyright>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+  </PropertyGroup>
+
   <ItemGroup>
     <InternalsVisibleTo Include="DotNetXISFTests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\README.md" Pack="true" PackagePath="\" />
   </ItemGroup>
 
   <ItemGroup>
