@@ -397,7 +397,7 @@
             <li><a href="#m9"><span class="num">M9</span> Data-block location &amp; <code>.xisb</code> index</a> <span class="capsule status-completed">Completed</span></li>
             <li><a href="#m10"><span class="num">M10</span> XISFDataBlock</a> <span class="capsule status-completed">Completed</span></li>
             <li><a href="#m11"><span class="num">M11</span> Properties, keywords &amp; metadata</a> <span class="capsule status-completed">Completed</span></li>
-            <li><a href="#m12"><span class="num">M12</span> Color &amp; ancillary elements</a> <span class="capsule status-not-started">Not started</span></li>
+            <li><a href="#m12"><span class="num">M12</span> Color &amp; ancillary elements</a> <span class="capsule status-completed">Completed</span></li>
             <li><a href="#m13"><span class="num">M13</span> XISFImage &amp; thumbnail</a> <span class="capsule status-not-started">Not started</span></li>
         </ol>
 
@@ -1555,7 +1555,7 @@
     <div class="milestone" id="m12">
         <div class="m-head">
             <h3>M12 &middot; Color &amp; ancillary elements</h3>
-            <span class="capsule status-not-started">Not started</span>
+            <span class="capsule status-completed">Completed</span>
         </div>
         <div class="field">
             <div class="label">Goal</div>
@@ -1564,18 +1564,108 @@
         <div class="field">
             <div class="label">Tasks</div>
             <ul class="tasks">
-                <li class="task">Port <code>XISFICCProfile</code> (wraps an <code>XISFDataBlock</code>; throwing <code>Data</code> of opaque big-endian ICC bytes; rejects missing location).</li>
-                <li class="task">Port <code>XISFRGBWorkingSpace</code> (nested <code>Primaries</code>, <code>Gamma</code> as <code>exponent(double)</code>/<code>sRGB</code>; invariant triplet and gamma parsing, case-insensitive sRGB).</li>
-                <li class="task">Port <code>XISFDisplayFunction</code> (nested <code>Components</code>; midtones/shadows/highlights/expansion vectors, component-count validation) and <code>XISFColorFilterArray</code> (nested <code>Element</code> character enum; pattern/width/height, computed <code>Elements</code>, pattern-length and character validation when strict).</li>
-                <li class="task">Port <code>XISFResolution</code> (nested <code>Unit</code> <code>inch</code>/<code>cm</code> with default; horizontal/vertical/unit; invariant parsing; positivity and unknown-unit handling per options).</li>
-                <li class="task">Port the color tests (RGB working space, display function, ICC profile, CFA, resolution parsing and strict/lenient rejections) and their description cases.</li>
+                <li class="task done">Port <code>XISFICCProfile</code> (wraps an <code>XISFDataBlock</code>; throwing <code>Data</code> of opaque big-endian ICC bytes; rejects missing location).</li>
+                <li class="task done">Port <code>XISFRGBWorkingSpace</code> (nested <code>Primaries</code>, <code>Gamma</code> as <code>exponent(double)</code>/<code>sRGB</code>; invariant triplet and gamma parsing, case-insensitive sRGB).</li>
+                <li class="task done">Port <code>XISFDisplayFunction</code> (nested <code>Components</code>; midtones/shadows/highlights/expansion vectors, component-count validation) and <code>XISFColorFilterArray</code> (nested <code>Element</code> character enum; pattern/width/height, computed <code>Elements</code>, pattern-length and character validation when strict).</li>
+                <li class="task done">Port <code>XISFResolution</code> (nested <code>Unit</code> <code>inch</code>/<code>cm</code> with default; horizontal/vertical/unit; invariant parsing; positivity and unknown-unit handling per options).</li>
+                <li class="task done">Port the color tests (RGB working space, display function, ICC profile, CFA, resolution parsing and strict/lenient rejections) and their description cases.</li>
             </ul>
         </div>
-        <div class="field"><div class="label">Status</div><span class="capsule status-not-started">Not started</span></div>
-        <div class="field"><div class="label">Completed</div><span class="placeholder">&mdash;</span></div>
-        <div class="field"><div class="label">Implementation notes</div><p class="placeholder">To be filled in during implementation.</p></div>
-        <div class="field"><div class="label">Automated review</div><p class="placeholder">To be filled in during implementation.</p></div>
-        <div class="field"><div class="label">Review comments</div><p class="placeholder">Awaiting human review.</p></div>
+        <div class="field"><div class="label">Status</div><span class="capsule status-completed">Completed</span></div>
+        <div class="field"><div class="label">Completed</div>2026-07-19</div>
+        <div class="field"><div class="label">Implementation notes</div>
+            <p>Implemented with TDD. Wrote the five test suites first, confirmed they failed to compile (the types did
+            not exist), then implemented to green. The four color types live under <code>Color/</code> and
+            <code>XISFResolution</code> under <code>Image/</code>, mirroring the source layout. The four value types are
+            <code>public readonly struct</code>s (Swift <code>public struct</code>) with <code>IEquatable&lt;T&gt;</code>,
+            <code>==</code>/<code>!=</code>, <code>ToString()</code> and nullable-backed default-struct safety;
+            <code>XISFIccProfile</code> is a <code>public sealed class</code> (Swift <code>final class</code>).</p>
+            <ul>
+                <li><strong>Acronym casing (M2 convention):</strong> the types are <code>XISFIccProfile</code> and
+                    <code>XISFRgbWorkingSpace</code> (ICC&rarr;Icc, RGB&rarr;Rgb), the .NET-idiomatic casing the maintainer
+                    approved and explicitly named for ICC/RGB in M2.</li>
+                <li><strong>Nested-type/property name-collision resolution</strong> (the M7/M8 precedent): the nested enum
+                    <code>XISFResolution.Unit</code> pairs with a property <code>ResolutionUnit</code>, and the nested type
+                    <code>XISFRgbWorkingSpace.Gamma</code> pairs with a property <code>GammaFunction</code> (a C# member
+                    cannot share its nested type's name). See Review comments for the <code>GammaFunction</code>
+                    confirmation.</li>
+                <li><strong><code>XISFIccProfile</code>:</strong> wraps an <code>XISFDataBlock</code>; <code>Data</code>
+                    delegates to the block's lazy decode (opaque big-endian ICC bytes); the constructor rejects a missing
+                    location (delegated to the block). <code>ToString</code> reports only the location, never reading the
+                    bytes.</li>
+                <li><strong><code>XISFRgbWorkingSpace</code>:</strong> nested <code>Primaries</code> (red/green/blue) and a
+                    nested <code>Gamma</code> discriminated value (a fixed <code>Exponent(double)</code> or the static
+                    <code>Srgb</code> function). The <code>x</code>/<code>y</code>/<code>Y</code> triplets parse three
+                    colon-separated invariant doubles; gamma matches <code>sRGB</code> case-insensitively (ordinal) or a
+                    number that must be positive under strict parsing.</li>
+                <li><strong><code>XISFDisplayFunction</code>:</strong> nested <code>Components</code> (rk/g/b/l); the five
+                    parameter vectors (<code>m</code>/<code>s</code>/<code>h</code>/<code>l</code>/<code>r</code>) each parse
+                    four colon-separated invariant doubles (a wrong component count is rejected).</li>
+                <li><strong><code>XISFColorFilterArray</code>:</strong> nested <code>Element</code> character enum
+                    (<code>None</code> the zero value) with a top-level <code>XISFColorFilterArrayElementExtensions</code>
+                    companion (<code>FromCharacter</code>/<code>Character</code>); <code>Elements</code> decodes the pattern
+                    copy-on-read, dropping invalid characters. Strict parsing validates the pattern characters, positive
+                    dimensions, and pattern length. <code>Width</code>/<code>Height</code> are <code>long</code> (the M11
+                    dimensions-are-<code>long</code> decision). The <code>width &times; height</code> length check is
+                    overflow-guarded (each dimension bounded against the pattern length before multiplying) so a hostile file
+                    yields a clean <code>XISFException</code> rather than an <code>OverflowException</code> under the
+                    project's checked arithmetic &mdash; a genuine improvement over the source's trapping multiply.</li>
+                <li><strong><code>XISFResolution</code>:</strong> nested <code>Unit</code> enum (<code>Inch</code> the
+                    zero/default, <code>Centimeter</code>) with a <code>XISFResolutionUnitExtensions</code> companion;
+                    horizontal/vertical parse invariant doubles (strictly positive under strict); an unknown unit is rejected
+                    under strict and falls back to inches under lenient.</li>
+                <li><strong>Double equality:</strong> <code>Primaries</code>/<code>Components</code>/<code>Resolution</code>/
+                    <code>Gamma</code> compare doubles with <code>==</code> (NaN&ne;NaN), matching the source's derived
+                    <code>Equatable</code> &mdash; deliberately unlike <code>XISFValue</code>'s NaN==NaN quirk (these values
+                    are never NaN in practice).</li>
+                <li><strong>Culture-invariance:</strong> every numeric parse/format uses
+                    <code>CultureInfo.InvariantCulture</code> (<code>NumberStyles.Float</code> for doubles, matching
+                    <code>XISFValue</code>; <code>AllowLeadingSign</code> for the long dimensions); no number is
+                    raw-interpolated. Added a fr-FR <code>ParsingIsCultureInvariant</code> test to each of the four
+                    numeric-parsing types.</li>
+                <li><strong>Result:</strong> <code>dotnet build</code> clean (0 warnings, 0 errors) and <code>dotnet test</code>
+                    green (223 passed, 0 failed; 35 new) in both Debug and Release; no M1&ndash;M11 regression.</li>
+            </ul>
+        </div>
+        <div class="field"><div class="label">Automated review</div>
+            <p>One review round (fresh-context sub-agent); converged immediately with <strong>no findings at all</strong>
+            (no Critical/High/Medium/Low). The reviewer independently rebuilt/re-ran both configs (223/223 pass, 0 warnings)
+            and compared every file against its Swift original, specifically verifying: the CFA <code>width &times; height</code>
+            overflow guard (correct, and more robust than the source's trapping multiply; a valid CFA passes and a genuine
+            mismatch still throws); that <em>no</em> number is culture-sensitively interpolated in any error message or
+            <code>ToString</code>; the <code>Gamma</code> default-safety, equality/hash consistency and ordinal
+            case-insensitive sRGB match; the deliberate <code>==</code> double equality; the empty-subsequence-preserving
+            colon splitting; the strict/lenient branches; default-struct safety for all four structs; and copy-on-read for
+            <code>Elements</code>. Two <code>Info</code> observations, neither requiring action:</p>
+            <ul>
+                <li><strong>Double parsing accepts surrounding whitespace where Swift's <code>Double()</code> does not</strong>
+                    (Info, Deferred) &mdash; <code>NumberStyles.Float</code> includes the whitespace flags; this is the
+                    codebase's prescribed double-parsing convention (established with <code>XISFValue</code> in M5), applied
+                    uniformly, not an M12 regression. The <code>long</code> dimension path (no whitespace flag) matches Swift
+                    tightly.</li>
+                <li><strong>CFA length-mismatch message wording differs cosmetically from the source</strong> (Info, Deferred)
+                    &mdash; the port reports <code>width (W) &times; height (H)</code> separately (both invariant-formatted)
+                    rather than the pre-computed product, to keep the overflow guard; no test asserts the exact text.</li>
+            </ul>
+        </div>
+        <div class="field"><div class="label">Review comments</div>
+            <ul>
+                <li><strong>Discussed the CFA length-mismatch message wording (automated-review Info&nbsp;#2).</strong> Walked
+                    through why the port reports <code>width (W) &times; height (H)</code> separately rather than the
+                    pre-computed product: computing <code>width &times; height</code> on a hostile file's huge dimensions
+                    would overflow and crash under the project's checked arithmetic, and the port's standing rule (from M9) is
+                    that a malformed file must always fail with a clean <code>XISFException</code>, never an
+                    <code>OverflowException</code> &mdash; so the multiply is guarded and the message avoids it. <em>The
+                    maintainer accepted the current wording as-is.</em></li>
+                <li><strong>Naming approved.</strong> The collision-resolution property names <code>ResolutionUnit</code> (for
+                    nested <code>Unit</code>) and <code>GammaFunction</code> (for nested <code>Gamma</code>) were approved, as
+                    were the <code>Icc</code>/<code>Rgb</code> acronym casing and the <code>long</code> CFA dimensions carried
+                    over from earlier decisions.</li>
+                <li>The maintainer reviewed the milestone and approved it as-is (&ldquo;Looks good&rdquo;). The two deferred
+                    <code>Info</code> observations (whitespace-tolerant double parsing; the cosmetic CFA message wording) were
+                    accepted without action.</li>
+            </ul>
+        </div>
     </div>
 
     <!-- M13 -->
