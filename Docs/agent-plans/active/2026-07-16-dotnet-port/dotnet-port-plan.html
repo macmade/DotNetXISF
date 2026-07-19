@@ -396,7 +396,7 @@
         <ol>
             <li><a href="#m9"><span class="num">M9</span> Data-block location &amp; <code>.xisb</code> index</a> <span class="capsule status-completed">Completed</span></li>
             <li><a href="#m10"><span class="num">M10</span> XISFDataBlock</a> <span class="capsule status-completed">Completed</span></li>
-            <li><a href="#m11"><span class="num">M11</span> Properties, keywords &amp; metadata</a> <span class="capsule status-not-started">Not started</span></li>
+            <li><a href="#m11"><span class="num">M11</span> Properties, keywords &amp; metadata</a> <span class="capsule status-completed">Completed</span></li>
             <li><a href="#m12"><span class="num">M12</span> Color &amp; ancillary elements</a> <span class="capsule status-not-started">Not started</span></li>
             <li><a href="#m13"><span class="num">M13</span> XISFImage &amp; thumbnail</a> <span class="capsule status-not-started">Not started</span></li>
         </ol>
@@ -1438,7 +1438,7 @@
     <div class="milestone" id="m11">
         <div class="m-head">
             <h3>M11 &middot; Properties, keywords &amp; metadata</h3>
-            <span class="capsule status-not-started">Not started</span>
+            <span class="capsule status-completed">Completed</span>
         </div>
         <div class="field">
             <div class="label">Goal</div>
@@ -1448,17 +1448,107 @@
         <div class="field">
             <div class="label">Tasks</div>
             <ul class="tasks">
-                <li class="task">Port <code>XISFProperty</code> (<code>Id</code>, <code>Type</code>, <code>Value</code>, optional <code>Comment</code>/<code>Format</code>/<code>Length</code>/<code>Rows</code>/<code>Columns</code>) with the element initializer dispatching on <code>Type.Category</code>: scalar/complex/time-point via <code>XISFValue</code>, string via inline content or a data-block-decoded UTF-8 string, vector/matrix/byteArray via an <code>XISFDataBlock</code> into <code>Value.Data</code>.</li>
-                <li class="task">Port <code>ParseList</code> (lenient skips malformed) and identifier validation.</li>
-                <li class="task">Port <code>XISFFITSKeyword</code> (<code>Name</code>, optional <code>Value</code>/<code>Comment</code>, empty value &rarr; null, name length/charset validated per options) and <code>XISFMetadata</code> (<code>Properties</code> bag + id subscript delegating to <code>ParseList</code>).</li>
-                <li class="task">Port the property, property-type, FITS-keyword and metadata tests (scalar/string/vector/matrix/byteArray/data-block-string parsing, rejections, option-gated identifier/name validation, category).</li>
+                <li class="task done">Port <code>XISFProperty</code> (<code>Id</code>, <code>Type</code>, <code>Value</code>, optional <code>Comment</code>/<code>Format</code>/<code>Length</code>/<code>Rows</code>/<code>Columns</code>) with the element initializer dispatching on <code>Type.Category</code>: scalar/complex/time-point via <code>XISFValue</code>, string via inline content or a data-block-decoded UTF-8 string, vector/matrix/byteArray via an <code>XISFDataBlock</code> into <code>Value.Data</code>.</li>
+                <li class="task done">Port <code>ParseList</code> (lenient skips malformed) and identifier validation.</li>
+                <li class="task done">Port <code>XISFFITSKeyword</code> (<code>Name</code>, optional <code>Value</code>/<code>Comment</code>, empty value &rarr; null, name length/charset validated per options) and <code>XISFMetadata</code> (<code>Properties</code> bag + id subscript delegating to <code>ParseList</code>).</li>
+                <li class="task done">Port the property, property-type, FITS-keyword and metadata tests (scalar/string/vector/matrix/byteArray/data-block-string parsing, rejections, option-gated identifier/name validation, category).</li>
             </ul>
         </div>
-        <div class="field"><div class="label">Status</div><span class="capsule status-not-started">Not started</span></div>
-        <div class="field"><div class="label">Completed</div><span class="placeholder">&mdash;</span></div>
-        <div class="field"><div class="label">Implementation notes</div><p class="placeholder">To be filled in during implementation.</p></div>
-        <div class="field"><div class="label">Automated review</div><p class="placeholder">To be filled in during implementation.</p></div>
-        <div class="field"><div class="label">Review comments</div><p class="placeholder">Awaiting human review.</p></div>
+        <div class="field"><div class="label">Status</div><span class="capsule status-completed">Completed</span></div>
+        <div class="field"><div class="label">Completed</div>2026-07-19</div>
+        <div class="field"><div class="label">Implementation notes</div>
+            <p>Implemented with TDD. Wrote the three test suites first, confirmed they failed to compile (the types did
+            not exist), then implemented to green. All three sources live under <code>Model/</code>, mirroring the source
+            layout; all are <code>public readonly struct</code> (the Swift originals are <code>public struct</code>) with
+            <code>IEquatable&lt;T&gt;</code>, <code>==</code>/<code>!=</code>, <code>ToString()</code>, and nullable-backed
+            default-struct safety per the M4 convention.</p>
+            <ul>
+                <li><strong><code>XISFProperty</code>:</strong> the element initializer dispatches on
+                    <code>Type.Category()</code> &mdash; scalar/complex/time-point read the <code>value</code> attribute
+                    through <code>XISFValue.FromAttribute</code>; a string value is the element's character content, or, when
+                    a <code>location</code> is present, an <code>XISFDataBlock</code> decoded as UTF-8; vector/matrix/
+                    <code>ByteArray</code> resolve an <code>XISFDataBlock</code> into <code>XISFValue.Data</code>.
+                    <code>ByteArray</code> maps to the <em>vector</em> category (so it reads <code>length</code>), matching the
+                    source. The category <code>switch</code> ends with a <code>default: throw</code> guard and assigns every
+                    get-only field on each non-throwing path.</li>
+                <li><strong>Strict UTF-8 for data-block strings:</strong> a static <code>UTF8Encoding( false, true )</code>
+                    (throw-on-invalid) decodes the bytes; a <code>DecoderFallbackException</code> is turned into a clean
+                    <code>XISFException.InvalidElement</code>, reproducing Swift's <code>String(data:encoding:.utf8)</code>
+                    returning <code>nil</code>. <em>Verified empirically before coding</em> that the strict codec throws on
+                    invalid bytes and decodes valid input. Covered by <code>RejectsInvalidUtf8StringDataBlock</code>.</li>
+                <li><strong><code>ParseList</code> (strict/lenient drop-vs-throw):</strong> a child with a missing/unknown
+                    <code>type</code> is dropped under <code>AllowSpecDeviations</code> and throws under strict; a child that
+                    otherwise fails to parse is caught (<code>catch( XISFException )</code> only, so unrelated exceptions still
+                    propagate) and likewise dropped under lenient / rethrown under strict. Covered by
+                    <code>DropsMalformedPropertyWhenLenient</code> (exercising both the type gate and the construction catch)
+                    and <code>ThrowsOnMalformedPropertyWhenStrict</code>.</li>
+                <li><strong>Identifier validation:</strong> <code>IsValidIdentifier</code> splits the id on <code>:</code>
+                    keeping empty components (matching the source's <code>omittingEmptySubsequences:&nbsp;false</code>) and
+                    requires each to be a valid XISF simple identifier; gated off under lenient.</li>
+                <li><strong>Post-review change (Low finding &rarr; applied M4 precedent):</strong> <code>Length</code>/
+                    <code>Rows</code>/<code>Columns</code> and the <code>Dimension</code> parser were widened from
+                    <code>int</code> to <code>long</code> (with <code>long.TryParse</code>). The source uses a 64-bit
+                    <code>Int</code> for these dimensions, and the maintainer already ruled in M4 that parsed dimension
+                    quantities should be <code>long</code> (the <code>XISFGeometry</code> switch). This erases an
+                    <code>int</code>-narrowing divergence for dimension values in the <code>2^31..2^63</code> range and keeps
+                    the port consistent with <code>XISFGeometry</code>.</li>
+                <li><strong><code>XISFFitsKeyword</code>:</strong> parses <code>&lt;FITSKeyword&gt;</code>; an empty
+                    <code>value</code> attribute becomes <code>null</code> (as on <code>HISTORY</code>/<code>COMMENT</code>
+                    cards); under strict parsing the name must be at most 8 characters from the FITS charset (uppercase
+                    letters, digits, <code>_</code>, <code>-</code>), relaxed under lenient. Named <code>XISFFitsKeyword</code>
+                    (not <code>XISFFITSKeyword</code>) &mdash; applying the M2 acronym-casing convention (a 4-letter acronym
+                    &rarr; PascalCase, as with <code>XmlParser</code>/<code>Sha1</code>); see Review comments for confirmation.</li>
+                <li><strong><code>XISFMetadata</code>:</strong> parses <code>&lt;Metadata&gt;</code> by delegating to
+                    <code>XISFProperty.ParseList</code>; exposes the properties copy-on-read
+                    (<code>this.properties?.ToArray() ?? []</code>, per the M6 feedback) and an <code>[id]</code> indexer
+                    returning the first match or <code>null</code>. Default-safe (null backing coalesced).</li>
+                <li><strong>Culture-invariance:</strong> dimension parsing and the metadata count format use
+                    <code>CultureInfo.InvariantCulture</code>; no number is raw-interpolated. Added a fr-FR
+                    <code>ParsingIsCultureInvariant</code> test over a float value and an integer dimension.</li>
+                <li><strong>Deferred to M15:</strong> <code>XISFValue</code> has no <code>ToString</code> yet (added with the
+                    Descriptions suite in M15), so <code>XISFProperty.ToString</code>'s <code>value:</code> slot currently
+                    renders <code>XISFValue</code> via its default form. No test asserts that slot; the <code>Description</code>
+                    test pins only the stable <code>id/type/kind</code> prefix.</li>
+                <li><strong>Result:</strong> <code>dotnet build</code> clean (0 warnings, 0 errors) and <code>dotnet test</code>
+                    green (188 passed, 0 failed; 30 new) in both Debug and Release; no M1&ndash;M10 regression.</li>
+            </ul>
+        </div>
+        <div class="field"><div class="label">Automated review</div>
+            <p>One review round (fresh-context sub-agent); converged immediately with <strong>no Critical/High/Medium
+            findings</strong>. The reviewer independently rebuilt/re-ran both configs (188/188 pass, 0 warnings) and verified
+            each focus area against the source: the strict/lenient drop-vs-throw in <code>ParseList</code> (including the
+            <code>XISFException</code>-only catch); the category <code>switch</code> definite-assignment and the
+            <code>ByteArray</code>&rarr;vector routing; the identifier validation; the strict-UTF-8 string decode;
+            default-struct safety and copy-on-read for <code>XISFMetadata</code>; culture-invariance; and equality/hashing
+            (value-equality of the data payloads). The change set was six new files only, so no regression surface beyond API
+            consumption. Findings:</p>
+            <ul>
+                <li><strong>Dimension width narrows the source's 64-bit <code>Int</code> to <code>int</code></strong> (Low,
+                    <em>Fixed</em>) &mdash; the reviewer noted <code>Length</code>/<code>Rows</code>/<code>Columns</code> were
+                    <code>int</code> while the source uses <code>Int</code> (64-bit). Widened them to <code>long</code>,
+                    applying the maintainer's M4 dimensions-are-<code>long</code> decision and erasing the divergence.</li>
+                <li><strong><code>XISFProperty.ToString</code> renders <code>Value</code> via its default form</strong> (Info,
+                    Deferred) &mdash; the intentional M15 deferral of <code>XISFValue.ToString</code>; no test asserts that
+                    slot.</li>
+                <li><strong>Per-property attribute-dictionary snapshots</strong> (Info, Deferred) &mdash;
+                    <code>XISFElement.Attributes</code> allocates a fresh dictionary per access, so a few snapshots are taken
+                    per property. This stems from the codebase-wide copy-on-read design of <code>XISFElement</code>; the M11
+                    code already caches the snapshot in a local where it can. No action.</li>
+            </ul>
+        </div>
+        <div class="field"><div class="label">Review comments</div>
+            <ul>
+                <li><strong><code>Fits</code> acronym casing confirmed.</strong> The maintainer approved naming the type
+                    <code>XISFFitsKeyword</code> (not <code>XISFFITSKeyword</code>), applying the .NET acronym-casing
+                    convention to the 4-letter <code>FITS</code> acronym. <em>Apply this casing to any further
+                    <code>FITS</code>-derived identifiers in later milestones</em> (for example the image's
+                    <code>Keywords</code> collection of <code>XISFFitsKeyword</code>).</li>
+                <li><strong>64-bit dimensions confirmed.</strong> The maintainer confirmed that
+                    <code>Length</code>/<code>Rows</code>/<code>Columns</code> should be <code>long</code> (already applied
+                    during the automated-review fix), consistent with the M4 decision that parsed dimension quantities are
+                    <code>long</code>.</li>
+            </ul>
+        </div>
     </div>
 
     <!-- M12 -->
