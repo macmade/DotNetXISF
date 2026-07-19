@@ -407,9 +407,13 @@ public readonly struct XISFDataBlockLocation : IEquatable< XISFDataBlockLocation
     private string IndexSuffix() => this.indexId is ulong id ? $":{ id.ToString( CultureInfo.InvariantCulture ) }" : "";
 
     /// <summary>Parses an inline/embedded encoding token.</summary>
+    /// <remarks>
+    /// Shared with the data-block resolver, which reads an embedded <c>&lt;Data&gt;</c>
+    /// element's <c>encoding</c> attribute through the same token mapping.
+    /// </remarks>
     /// <param name="name">The encoding token, matched exactly (case-sensitive).</param>
     /// <returns>The matching encoding, or <c>null</c> when the token is not a known encoding.</returns>
-    private static Encoding? EncodingFromName( string name )
+    internal static Encoding? EncodingFromName( string name )
     {
         return name switch
         {

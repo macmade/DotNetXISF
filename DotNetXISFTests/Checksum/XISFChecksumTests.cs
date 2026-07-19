@@ -40,7 +40,7 @@ public class XISFChecksumTests
     private const string Sha1Hex = "d78f8bb992a56a597f6c7a1fb918bb78271367eb";
 
     /// <summary>The reference payload's SHA-256 digest (computed by python <c>hashlib</c>).</summary>
-    private const string Sha256Hex = "5f78c33274e43fa9de5659265c1d917e25c03722dcb0b8d27db8d5feaa813953";
+    internal const string Sha256Hex = "5f78c33274e43fa9de5659265c1d917e25c03722dcb0b8d27db8d5feaa813953";
 
     /// <summary>The reference payload's SHA-512 digest (computed by python <c>hashlib</c>).</summary>
     private const string Sha512Hex = "1284b2d521535196f22175d5f558104220a6ad7680e78b49fa6f20e57ea7b185d71ec1edb137e70eba528dedb141f5d2f8bb53149d262932b27cf41fed96aa7f";

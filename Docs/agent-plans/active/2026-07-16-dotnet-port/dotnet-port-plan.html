@@ -395,7 +395,7 @@
         <div class="phase">Phase 4 &middot; Data blocks, properties &amp; imaging</div>
         <ol>
             <li><a href="#m9"><span class="num">M9</span> Data-block location &amp; <code>.xisb</code> index</a> <span class="capsule status-completed">Completed</span></li>
-            <li><a href="#m10"><span class="num">M10</span> XISFDataBlock</a> <span class="capsule status-not-started">Not started</span></li>
+            <li><a href="#m10"><span class="num">M10</span> XISFDataBlock</a> <span class="capsule status-completed">Completed</span></li>
             <li><a href="#m11"><span class="num">M11</span> Properties, keywords &amp; metadata</a> <span class="capsule status-not-started">Not started</span></li>
             <li><a href="#m12"><span class="num">M12</span> Color &amp; ancillary elements</a> <span class="capsule status-not-started">Not started</span></li>
             <li><a href="#m13"><span class="num">M13</span> XISFImage &amp; thumbnail</a> <span class="capsule status-not-started">Not started</span></li>
@@ -1296,7 +1296,7 @@
     <div class="milestone" id="m10">
         <div class="m-head">
             <h3>M10 &middot; XISFDataBlock</h3>
-            <span class="capsule status-not-started">Not started</span>
+            <span class="capsule status-completed">Completed</span>
         </div>
         <div class="field">
             <div class="label">Goal</div>
@@ -1306,17 +1306,132 @@
         <div class="field">
             <div class="label">Tasks</div>
             <ul class="tasks">
-                <li class="task">Port <code>XISFDataBlock</code>: capture <code>Location</code>, optional <code>Compression</code>, <code>Checksum</code>, raw byte-order, options and base URL; resolve inline (base64/hex), embedded (<code>&lt;Data&gt;</code> child) and attachment (absolute-offset slice) bytes.</li>
-                <li class="task">Implement the lazy cached resolve/decode that stores success <em>and</em> failure (no retry), with checksum verification (when enabled) over the stored bytes <em>before</em> decompression, then decompression.</li>
-                <li class="task">Implement external resolution (opt-in via <code>allowExternalLocations</code>, lazy, local-only, remote URLs rejected) delegating to <code>XISFDataBlocksFile</code> for indexed <code>.xisb</code> blocks; expose throwing <code>RawBytes</code>/<code>Data</code>/<code>UncompressedSize</code> and <code>ToString()</code>.</li>
-                <li class="task">Port the data-block tests (inline/embedded/attachment resolution and rejections, raw-attribute capture, embedded compression/checksum from the <code>&lt;Data&gt;</code> child, decompresses/equals-raw, corrupt-stream throws, checksum verify/mismatch/skip) and the external-data-block tests (absolute/header-relative whole-file, <code>.xisb</code>-by-index, unknown-index, disabled-resolution, missing-file, no-base-URL, remote-URL rejection, unknown uncompressed size) with temp files and <code>try/finally</code> cleanup.</li>
+                <li class="task done">Port <code>XISFDataBlock</code>: capture <code>Location</code>, optional <code>Compression</code>, <code>Checksum</code>, raw byte-order, options and base URL; resolve inline (base64/hex), embedded (<code>&lt;Data&gt;</code> child) and attachment (absolute-offset slice) bytes.</li>
+                <li class="task done">Implement the lazy cached resolve/decode that stores success <em>and</em> failure (no retry), with checksum verification (when enabled) over the stored bytes <em>before</em> decompression, then decompression.</li>
+                <li class="task done">Implement external resolution (opt-in via <code>allowExternalLocations</code>, lazy, local-only, remote URLs rejected) delegating to <code>XISFDataBlocksFile</code> for indexed <code>.xisb</code> blocks; expose throwing <code>RawBytes</code>/<code>Data</code>/<code>UncompressedSize</code> and <code>ToString()</code>.</li>
+                <li class="task done">Port the data-block tests (inline/embedded/attachment resolution and rejections, raw-attribute capture, embedded compression/checksum from the <code>&lt;Data&gt;</code> child, decompresses/equals-raw, corrupt-stream throws, checksum verify/mismatch/skip) and the external-data-block tests (absolute/header-relative whole-file, <code>.xisb</code>-by-index, unknown-index, disabled-resolution, missing-file, no-base-URL, remote-URL rejection, unknown uncompressed size) with temp files and <code>try/finally</code> cleanup.</li>
             </ul>
         </div>
-        <div class="field"><div class="label">Status</div><span class="capsule status-not-started">Not started</span></div>
-        <div class="field"><div class="label">Completed</div><span class="placeholder">&mdash;</span></div>
-        <div class="field"><div class="label">Implementation notes</div><p class="placeholder">To be filled in during implementation.</p></div>
-        <div class="field"><div class="label">Automated review</div><p class="placeholder">To be filled in during implementation.</p></div>
-        <div class="field"><div class="label">Review comments</div><p class="placeholder">Awaiting human review.</p></div>
+        <div class="field"><div class="label">Status</div><span class="capsule status-completed">Completed</span></div>
+        <div class="field"><div class="label">Completed</div>2026-07-19</div>
+        <div class="field"><div class="label">Implementation notes</div>
+            <p>Implemented with TDD. Wrote both data-block test suites first (in-file and external),
+            confirmed they failed to compile (<code>XISFDataBlock</code> did not yet exist), then implemented the
+            type to green. Placed under <code>DataBlock/</code>, mirroring the source layout.</p>
+            <ul>
+                <li><strong><code>XISFDataBlock</code>:</strong> a <code>public sealed class</code> (the Swift original is a
+                    <code>final class</code>) capturing <code>Location</code>, optional <code>Compression</code>/
+                    <code>Checksum</code>, <code>RawByteOrder</code>, the parsing options and the base directory. In-file
+                    locations (inline base64/hex, embedded <code>&lt;Data&gt;</code> child, attachment slice) are decoded
+                    eagerly in the constructor; external <code>url(...)</code>/<code>path(...)</code> locations are validated
+                    but their bytes are read lazily on first access. Per the maintainer's convention, immutable members are
+                    get-only auto-properties (including the private ones), not fields.</li>
+                <li><strong>Lazy success-<em>and</em>-failure caching:</strong> <code>RawBytes</code> and <code>Data</code>
+                    are backed by two <code>Lazy&lt;ReadOnlyMemory&lt;byte&gt;&gt;</code> caches created with
+                    <code>LazyThreadSafetyMode.None</code>. <em>Verified empirically before coding</em> (throwaway .NET 10
+                    file-based program) that <code>None</code> mode runs the value factory exactly once and re-throws the
+                    <em>same cached exception</em> on every subsequent access &mdash; reproducing the Swift
+                    <code>Result&lt;Data, Error&gt;</code> semantics (a failed resolve/decode is cached, not retried). The
+                    documented not-thread-safe caveat is carried over. <code>Data</code>'s factory reads <code>RawBytes</code>
+                    (a distinct <code>Lazy</code>), so there is no self-recursive <code>Lazy</code> access.</li>
+                <li><strong>Decode order:</strong> <code>Data</code> resolves the stored bytes, then &mdash; only when
+                    <code>VerifyChecksums</code> is set and a checksum is present &mdash; verifies the checksum over the
+                    <em>stored (still-compressed)</em> bytes <em>before</em> decompressing, then decompresses (or returns the
+                    stored bytes unchanged when uncompressed). Mirrors the source exactly.</li>
+                <li><strong>Embedded-vs-parent attribute precedence:</strong> for an embedded block the compression,
+                    subblocks, checksum and byteOrder attributes are read from the <code>&lt;Data&gt;</code> child with a
+                    fallback to the parent element; for all other blocks the two sources are the same element (harmless
+                    redundancy), faithfully mirroring the source. The embedded <code>encoding</code> token is parsed through
+                    <code>XISFDataBlockLocation.EncodingFromName</code>, whose visibility was widened <code>private</code>
+                    &rarr; <code>internal</code> (M9 file) so it can be reused here rather than duplicating the two-case map
+                    &mdash; the same reuse the Swift makes of <code>Encoding(rawValue:)</code>.</li>
+                <li><strong>Checksum parse-leniency:</strong> a malformed <code>checksum</code> attribute is fatal only when
+                    <code>VerifyChecksums</code> is set; otherwise the parse error is swallowed and the checksum is treated as
+                    absent (matching the source's <code>try?</code>).</li>
+                <li><strong>External resolution (opt-in, lazy, local-only):</strong> gated on
+                    <code>AllowExternalLocations</code> (off in both presets). A <code>url(...)</code> location must be a local
+                    <code>file:</code> URL &mdash; a remote URL (<code>Uri.IsFile == false</code>) is rejected with a clean
+                    <code>XISFException</code>, so <strong>remote URLs are never fetched</strong>. Absolute and
+                    header-relative <code>path(...)</code> locations read a local file (the latter requires a base directory,
+                    else a clean error); an <code>:index-id</code> suffix delegates to
+                    <code>XISFDataBlocksFile.Block</code> for the indexed <code>.xisb</code> block. The
+                    <code>File.ReadAllBytes</code> call is wrapped in a narrow <code>try</code> whose <code>when</code> filter
+                    (<code>IOException</code>/<code>UnauthorizedAccessException</code>/<code>ArgumentException</code>/
+                    <code>NotSupportedException</code>) turns any read failure into a <code>DataBlockError</code> while
+                    <em>not</em> catching the <code>XISFException</code> from the subsequent index lookup.</li>
+                <li><strong>Hostile-file overflow safety:</strong> the attachment slice narrows the <code>long</code>
+                    position/size to <code>int</code> only after a guard (<code>position &gt; fileData.Length || size &gt;
+                    fileData.Length - position</code>) written so the subtraction cannot overflow under the project's checked
+                    arithmetic; when it passes, both values are &le; the file length (a valid <code>int</code>), so the casts
+                    are safe.</li>
+                <li><strong><code>ToString()</code> is side-effect-free:</strong> it reports the location, compression and
+                    checksum plus the cheaply-known decoded size (from <code>Compression.UncompressedSize</code> or the
+                    already-resolved in-file byte count), never touching the lazy caches &mdash; so it never triggers external
+                    resolution or decompression. The size is formatted with <code>CultureInfo.InvariantCulture</code>.</li>
+                <li><strong>Tests:</strong> the two ported suites (17 in-file + 9 external) mirror the Swift originals
+                    one-to-one, using temp files under <code>Path.GetTempPath()</code> with <code>Guid.NewGuid()</code> names
+                    in <code>try/finally</code> cleanup via the shared <code>RemoveTemporaryFile</code> helper and the M9
+                    <code>TestUtilities.DataBlocksFile</code> builder. Added a <code>Description</code> test and a
+                    <code>DescriptionIsCultureInvariant</code> (fr-FR) test, following the established convention for any type
+                    that formats numbers. Three test-fixture constants
+                    (<code>XISFChecksumTests.Sha256Hex</code>, <code>XISFCompressionTests.TextHex</code>/<code>ZlibTextHex</code>)
+                    were widened <code>private</code> &rarr; <code>internal</code> so the data-block tests reuse them, mirroring
+                    the Swift's shared <code>Test_XISFCompression</code>/<code>Test_XISFChecksum</code> fixtures rather than
+                    duplicating the hex literals.</li>
+                <li><strong>Result:</strong> <code>dotnet build</code> clean (0 warnings, 0 errors) and <code>dotnet test</code>
+                    green (158 passed, 0 failed; 28 new) in both Debug and Release; no M1&ndash;M9 regression.</li>
+            </ul>
+        </div>
+        <div class="field"><div class="label">Automated review</div>
+            <p>One review round (fresh-context sub-agent); converged immediately with <strong>no Critical/High/Medium
+            findings</strong>. The reviewer independently rebuilt/re-ran both configs (158/158 pass, 0 warnings) and verified
+            each focus area: the <code>Lazy</code> exception-caching (no retry) reproduces the Swift <code>Result</code>
+            semantics; the attachment long&rarr;int narrowing is overflow- and bounds-safe; the <code>File.ReadAllBytes</code>
+            catch is broad enough for real read failures yet does not swallow the index-lookup <code>XISFException</code>;
+            remote URLs are genuinely rejected and only local files are read; the embedded-vs-parent attribute precedence and
+            the checksum parse-leniency match the source; and <code>ToString()</code> never triggers resolution/decompression.
+            The reviewer confirmed the four <code>private</code>&rarr;<code>internal</code> visibility widenings introduce no
+            regression and no new public surface. Four findings, none requiring a fix:</p>
+            <ul>
+                <li><strong><code>ReadExternalFile</code> catch filter omits <code>SecurityException</code></strong> (Low,
+                    Deferred) &mdash; the Swift original uses a catch-all; the C# filter covers <code>IOException</code>/
+                    <code>UnauthorizedAccessException</code>/<code>ArgumentException</code>/<code>NotSupportedException</code>
+                    but not <code>System.Security.SecurityException</code>, which <code>File.ReadAllBytes</code> is documented
+                    to throw on a security-restricted path (rare on modern .NET). Adding <code>or SecurityException</code>
+                    would restore full parity.</li>
+                <li><strong>Header-relative path not confined to the base directory</strong> (Low, Deferred) &mdash;
+                    <code>Path.Combine(baseDirectory, relativePath)</code> discards the base when the relative part is rooted
+                    (e.g. <code>@header_dir//etc/passwd</code>), and <code>..</code> can traverse upward (both ports). This
+                    grants <em>no new</em> access, since absolute <code>path(...)</code> locations are already fully permitted
+                    when <code>AllowExternalLocations</code> is enabled; flagged as a behavioral-fidelity divergence from
+                    Swift's <code>appendingPathComponent</code> and a latent footgun if <code>@header_dir</code> is ever
+                    assumed to be confined.</li>
+                <li><strong>Whole-file <code>byte[]</code> read vs. Swift's memory-mapping</strong> (Info, Deferred) &mdash;
+                    the port reads the whole external resource into a <code>byte[]</code> (2&nbsp;GB cap; larger files throw a
+                    cleanly-caught <code>IOException</code>) rather than Swift's lazy <code>mappedIfSafe</code>. More
+                    memory-eager for a large <code>.xisb</code> from which only one block is needed; gated behind opt-in
+                    external resolution.</li>
+                <li><strong>Test parity is thorough</strong> (Info) &mdash; the two suites mirror the Swift originals
+                    one-to-one; no action.</li>
+            </ul>
+        </div>
+        <div class="field"><div class="label">Review comments</div>
+            <ul>
+                <li><strong>Discussed the header-relative path divergence (automated-review Low&nbsp;#2).</strong> Walked
+                    through how the port resolves a <code>path(@header_dir/&hellip;)</code> location and how it can escape the
+                    header directory. Verified both sides empirically: the C# <code>Path.Combine</code> and the Swift
+                    <code>URL.appendingPathComponent</code> diverge <em>only</em> on a rooted remainder (leading <code>/</code>)
+                    &mdash; C# discards the base and escapes, Swift keeps the file under the base &mdash; while a
+                    <code>..</code> remainder escapes identically in <em>both</em> ports (so Swift offers no real confinement
+                    either). Concluded the escape grants no new capability, since <code>AllowExternalLocations</code> (off in
+                    both presets) already permits arbitrary absolute-path reads by design, and no real file produces such a
+                    location. <em>The maintainer accepted the current behavior as-is</em>, with no confinement added and no
+                    change to match Swift's leading-slash quirk.</li>
+                <li>The maintainer reviewed the milestone and approved it as-is (&ldquo;Looks good&rdquo;). The remaining
+                    deferred findings (the <code>SecurityException</code> catch-filter gap, and the informational
+                    whole-file-read-vs-mmap note) were accepted without action.</li>
+            </ul>
+        </div>
     </div>
 
     <!-- M11 -->
