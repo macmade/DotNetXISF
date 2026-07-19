@@ -382,7 +382,7 @@
         <div class="phase">Phase 2 &middot; Enums, values &amp; geometry</div>
         <ol>
             <li><a href="#m4"><span class="num">M4</span> Format enums &amp; geometry</a> <span class="capsule status-completed">Completed</span></li>
-            <li><a href="#m5"><span class="num">M5</span> XISFValue</a> <span class="capsule status-not-started">Not started</span></li>
+            <li><a href="#m5"><span class="num">M5</span> XISFValue</a> <span class="capsule status-completed">Completed</span></li>
         </ol>
 
         <div class="phase">Phase 3 &middot; XML, checksums &amp; compression</div>
@@ -768,7 +768,7 @@
     <div class="milestone" id="m5">
         <div class="m-head">
             <h3>M5 &middot; XISFValue</h3>
-            <span class="capsule status-not-started">Not started</span>
+            <span class="capsule status-completed">Completed</span>
         </div>
         <div class="field">
             <div class="label">Goal</div>
@@ -784,11 +784,97 @@
                 <li class="task">Add a culture-swap test (<code>fr-FR</code>) over float/complex/time-point parsing; port the full <code>XISFValue</code> test suite (accessors, kind, equality/NaN, distinct hashing, each parse path, rejects-non-value-types), adapting only float-text expectations.</li>
             </ul>
         </div>
-        <div class="field"><div class="label">Status</div><span class="capsule status-not-started">Not started</span></div>
-        <div class="field"><div class="label">Completed</div><span class="placeholder">&mdash;</span></div>
-        <div class="field"><div class="label">Implementation notes</div><p class="placeholder">To be filled in during implementation.</p></div>
-        <div class="field"><div class="label">Automated review</div><p class="placeholder">To be filled in during implementation.</p></div>
-        <div class="field"><div class="label">Review comments</div><p class="placeholder">Awaiting human review.</p></div>
+        <div class="field"><div class="label">Status</div><span class="capsule status-completed">Completed</span></div>
+        <div class="field"><div class="label">Completed</div>2026-07-19</div>
+        <div class="field"><div class="label">Implementation notes</div>
+            <p>Implemented with TDD. Wrote the <code>XISFValue</code> test suite first, confirmed it failed to
+            compile (the types did not exist), then implemented to green. Sources placed under <code>Model/</code>
+            mirroring the source layout. The design mirrors the completed sibling port's <code>FITSValue</code>
+            (lean value type, bit-reinterpreting numeric slot, <code>As</code>-prefixed accessors, <code>NaN</code>-equal rule).</p>
+            <ul>
+                <li><strong><code>XISFValueKind</code>:</strong> a <code>public enum</code> with the eight cases
+                    (<code>Boolean</code>, <code>Integer</code>, <code>UnsignedInteger</code>, <code>Float</code>,
+                    <code>Complex</code>, <code>String</code>, <code>TimePoint</code>, <code>Data</code>).
+                    <code>Boolean</code> is the zero value, so <code>default(XISFValue)</code> is a safe boolean
+                    <code>false</code>. A same-file companion <code>XISFValueKindExtensions.Description()</code> supplies
+                    the readable names (including <code>Unsigned Integer</code>/<code>Time Point</code>), following the M4
+                    enum-plus-companion convention.</li>
+                <li><strong><code>XISFValue</code>:</strong> a <code>readonly struct : IEquatable&lt;XISFValue&gt;</code>.
+                    Lean representation: the <code>XISFValueKind</code> discriminator, a primary <code>long</code> slot
+                    reinterpreting the bits of the <code>bool</code>/<code>long</code>/<code>ulong</code>/<code>double</code>
+                    payloads (and a complex value's real component), a secondary <code>long</code> for a complex value's
+                    imaginary component, and dedicated <code>string?</code>/<code>DateTimeOffset</code>/<code>ReadOnlyMemory&lt;byte&gt;</code>
+                    slots. Static factories per case; nullable <code>As</code>-prefixed accessors (<code>AsBoolean</code> &hellip;
+                    <code>AsData</code>) &mdash; the <code>As</code> prefix avoids the factory/accessor name collision, matching
+                    the sibling. <code>AsComplex</code> returns a named <code>(double Real, double Imaginary)?</code> tuple.</li>
+                <li><strong>Equality &amp; hashing:</strong> two <code>NaN</code> floats compare equal (departing from IEEE 754)
+                    for both a float and either complex component (<code>FloatEquals</code>); byte payloads compare by content
+                    (<code>Span.SequenceEqual</code>); time-points compare by instant (<code>DateTimeOffset</code> equality);
+                    differing kinds are never equal. <code>GetHashCode</code> stays consistent &mdash; every <code>NaN</code>
+                    normalized to one bucket (<code>NormalizeNaN</code>), bytes hashed by content (<code>HashCode.AddBytes</code>),
+                    the kind mixed into every hash. The <code>Equals</code>/<code>GetHashCode</code> switches deliberately end
+                    with <code>_ =&gt; false</code>/<code>default: return 0</code> rather than <code>throw</code>: they are
+                    exhaustive over the eight kinds and equality/hash must never throw.</li>
+                <li><strong><code>FromAttribute(string, type)</code>:</strong> invariant-culture per-kind parsing dispatched on
+                    the property type. Booleans accept <code>1</code>/<code>true</code>/<code>0</code>/<code>false</code>
+                    (words case-insensitive via <code>OrdinalIgnoreCase</code>). Signed/unsigned integers parse through a generic
+                    <code>INumberBase&lt;T&gt;.TryParse</code> with <code>NumberStyles.AllowLeadingSign</code> (rejects whitespace,
+                    decimals and exponents, and range-checks per declared width) then widen with <code>long</code>/<code>ulong.CreateChecked</code>.
+                    Float uses <code>NumberStyles.Float</code>; complex splits on the first comma (<code>IndexOf(',')</code>, the
+                    analog of the source's single-split) with a parenthesis guard. Non-value-attribute types (string, byteArray,
+                    all vectors/matrices) are rejected via the switch <code>default</code> arm.</li>
+                <li><strong>Pre-verified .NET behaviors empirically</strong> (throwaway console) before coding, per the
+                    &ldquo;verify, don't assume&rdquo; rule: <code>double.TryParse</code> accepts lowercase <code>nan</code>;
+                    unsigned parse rejects <code>-1</code>; width overflow is rejected; and the chosen ISO-8601 date formats
+                    behave as intended.</li>
+                <li><strong>Bug caught by a red test:</strong> the <code>AsData</code> accessor's <code>null</code> branch
+                    initially bound to the implicit <code>byte[]</code>&rarr;<code>ReadOnlyMemory&lt;byte&gt;</code> conversion
+                    (a <code>null</code> array becoming an empty buffer), so it never returned a genuine <code>null</code>. Fixed
+                    by typing the active branch as the nullable form; documented in a remark.</li>
+                <li><strong>Post-review change (Medium finding, round 1):</strong> the time-point parser first used
+                    <code>K</code>-based formats, which accept a <em>zone-less</em> string and bind it to the host's local time
+                    zone &mdash; non-deterministic and divergent from the source's zone-required internet-date-time. Replaced with
+                    four zone-mandatory formats (a literal <code>'Z'</code> variant and a <code>zzz</code> numeric-offset variant,
+                    each in whole-second and fractional forms) parsed with <code>DateTimeStyles.AssumeUniversal</code>. Verified a
+                    <code>Z</code> string yields UTC <code>+00:00</code> regardless of host time zone (tested under
+                    <code>America/New_York</code> and <code>Asia/Tokyo</code>), numeric offsets are preserved, and zone-less and
+                    date-only strings are rejected; added a zone-less rejection assertion. Also applied the two minor review notes:
+                    moved <code>TimePointFormats</code> up with the other fields and used a collection-expression initializer.</li>
+                <li><strong>Result:</strong> <code>dotnet build</code> clean (0 warnings, 0 errors) and <code>dotnet test</code>
+                    green (65 passed, 0 failed; 16 new) in both Debug and Release; no M1&ndash;M4 regression.</li>
+            </ul>
+        </div>
+        <div class="field"><div class="label">Automated review</div>
+            <p>Two review rounds, each a fresh-context sub-agent reviewing the uncommitted changes cold. Round&nbsp;1 raised one
+            <code>Medium</code> finding, which was fixed; round&nbsp;2 (re-reviewing the fixed state) reported
+            <strong>no Critical/High/Medium findings</strong> and the loop converged.</p>
+            <ul>
+                <li><strong>Zone-less date-time parsed against local time zone</strong> (Medium, <em>Fixed</em>, round&nbsp;1)
+                    &mdash; the <code>K</code>-based time-point formats accepted a zone-less string and bound it to the host's
+                    local offset, non-deterministic and divergent from the source's zone-required internet-date-time. Fixed with
+                    zone-mandatory formats + <code>DateTimeStyles.AssumeUniversal</code>; round&nbsp;2 independently verified
+                    determinism under <code>TZ=Asia/Tokyo</code> (a <code>Z</code> string yields <code>+00:00</code> regardless of
+                    host TZ; zone-less/date-only rejected; numeric offsets preserved).</li>
+                <li><strong><code>TimePointFormats</code> declared mid-file</strong> (Low, <em>Fixed</em>, round&nbsp;1) &mdash;
+                    moved the static field up with the other field declarations, matching the sibling precedent.</li>
+                <li><strong>Array initializer style</strong> (Info, <em>Fixed</em>, round&nbsp;1) &mdash; switched
+                    <code>= { &hellip; }</code> to the collection-expression <code>[ &hellip; ]</code> for cross-file consistency.</li>
+                <li><strong>Round&nbsp;2 observations</strong> (Info, Deferred; no action) &mdash; (a) <code>XISFValueKind.cs</code>
+                    holds the enum plus its companion, the established documented pattern in this codebase; (b) the
+                    <code>Equals</code>/<code>GetHashCode</code> switches end with <code>false</code>/<code>0</code> rather than
+                    <code>throw</code>, which is justified (exhaustive over the eight kinds; these methods must never throw); and
+                    (c) <code>Trim()</code> also strips newlines and <code>double.TryParse</code> accepts <code>Infinity</code> but
+                    not <code>inf</code> &mdash; strictly more lenient, immaterial to XISF/PixInsight output, and untested.</li>
+            </ul>
+        </div>
+        <div class="field"><div class="label">Review comments</div>
+            <ul>
+                <li>The maintainer reviewed the milestone and approved it as-is (&ldquo;Looks good&rdquo;), with no change
+                    requests. The deferred <code>Info</code> observations surfaced at the pause (enum-plus-companion file, the
+                    non-throwing <code>Equals</code>/<code>GetHashCode</code> defaults, and the strictly-more-lenient
+                    <code>Trim()</code>/<code>Infinity</code> parsing) were accepted without action.</li>
+            </ul>
+        </div>
     </div>
 
     <div class="phase-banner">Phase 3 &middot; XML, checksums &amp; compression</div>
