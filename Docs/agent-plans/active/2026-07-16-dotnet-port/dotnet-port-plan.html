@@ -381,7 +381,7 @@
 
         <div class="phase">Phase 2 &middot; Enums, values &amp; geometry</div>
         <ol>
-            <li><a href="#m4"><span class="num">M4</span> Format enums &amp; geometry</a> <span class="capsule status-not-started">Not started</span></li>
+            <li><a href="#m4"><span class="num">M4</span> Format enums &amp; geometry</a> <span class="capsule status-completed">Completed</span></li>
             <li><a href="#m5"><span class="num">M5</span> XISFValue</a> <span class="capsule status-not-started">Not started</span></li>
         </ol>
 
@@ -664,7 +664,7 @@
     <div class="milestone" id="m4">
         <div class="m-head">
             <h3>M4 &middot; Format enums &amp; geometry</h3>
-            <span class="capsule status-not-started">Not started</span>
+            <span class="capsule status-completed">Completed</span>
         </div>
         <div class="field">
             <div class="label">Goal</div>
@@ -680,11 +680,88 @@
                 <li class="task">Port the corresponding tests (raw-value/spec, defaults, bytes-per-sample, category, geometry parse/reject) and the enum-description portions of the <code>Descriptions</code> suite that belong to these types.</li>
             </ul>
         </div>
-        <div class="field"><div class="label">Status</div><span class="capsule status-not-started">Not started</span></div>
-        <div class="field"><div class="label">Completed</div><span class="placeholder">&mdash;</span></div>
-        <div class="field"><div class="label">Implementation notes</div><p class="placeholder">To be filled in during implementation.</p></div>
-        <div class="field"><div class="label">Automated review</div><p class="placeholder">To be filled in during implementation.</p></div>
-        <div class="field"><div class="label">Review comments</div><p class="placeholder">Awaiting human review.</p></div>
+        <div class="field"><div class="label">Status</div><span class="capsule status-completed">Completed</span></div>
+        <div class="field"><div class="label">Completed</div>2026-07-19</div>
+        <div class="field"><div class="label">Implementation notes</div>
+            <p>Implemented with TDD. Wrote the enum, geometry and description tests first, confirmed red, then implemented
+            to green. Sources placed under <code>Model/</code> and <code>Image/</code> mirroring SwiftXISF.</p>
+            <ul>
+                <li><strong>String-backed enums &rarr; C# enums + companion:</strong> each enum
+                    (<code>XISFPropertyType</code>, <code>XISFSampleFormat</code>, <code>XISFColorSpace</code>,
+                    <code>XISFByteOrder</code>, <code>XISFPixelStorage</code>) is a real C# <code>enum</code> paired with a
+                    <code>static class &lt;Enum&gt;Extensions</code> in the <em>same file</em> &mdash; an intentional
+                    grouping, since a C# enum cannot carry the parse/format/computed behavior the Swift enum had. Each
+                    companion provides <code>FromSpecToken(string) : Enum?</code> and <code>SpecToken(this Enum)</code>.</li>
+                <li><strong>Parsing rejects non-tokens exactly like Swift:</strong> <code>FromSpecToken</code> is a
+                    reverse-lookup over <code>SpecToken()</code> with <code>StringComparison.Ordinal</code> &mdash;
+                    deliberately <em>not</em> <code>Enum.TryParse</code>, which would wrongly accept numeric strings
+                    (<code>"1"</code>) and wrong-case tokens. Tests pin the <code>"1"</code> and <code>"boolean"</code>
+                    rejections.</li>
+                <li><strong>SpecToken casing:</strong> where the member name equals the token
+                    (<code>XISFPropertyType</code>, <code>XISFSampleFormat</code>, <code>XISFPixelStorage</code>),
+                    <code>SpecToken()</code> returns <code>ToString()</code>; where they differ, an explicit switch maps
+                    idiomatic members to spec strings (<code>Rgb&rarr;"RGB"</code>, <code>CieLab&rarr;"CIELab"</code>,
+                    <code>Little&rarr;"little"</code>, <code>Big&rarr;"big"</code>).</li>
+                <li><strong>Enum zero = default:</strong> <code>Gray</code>/<code>Little</code>/<code>Planar</code> are each
+                    the zero value; <code>XISFByteOrder</code> was reordered to <code>{ Little, Big }</code> (source lists
+                    <code>big</code> first) so the default is zero. Each companion exposes a <code>Default</code> const,
+                    and tests assert it equals both <code>Default</code> and <code>default(T)</code>.</li>
+                <li><strong><code>XISFPropertyCategory</code>:</strong> a top-level enum (the source nested it inside the
+                    property-type enum, which C# cannot do), with the category accessor as
+                    <code>XISFPropertyType.Category()</code>.</li>
+                <li><strong><code>XISFGeometry</code>:</strong> a <code>readonly struct : IEquatable&lt;XISFGeometry&gt;</code>
+                    with <code>long</code> dimensions, channel count, <code>PixelCount</code> and <code>SampleCount</code>
+                    throughout (matching the source's 64-bit <code>Int</code> and the DotNetFITS parsed representation; see
+                    Review comments). Invariant-culture <code>long.TryParse</code> with <code>NumberStyles.AllowLeadingSign</code>
+                    (matches the source's <code>Int()</code>: allows a sign, rejects whitespace), positivity checks, and a
+                    <code>ToString()</code> emitting <code>d1:...:dN:channels</code>.</li>
+                <li><strong>Non-exhaustive switches</strong> end with <code>default =&gt; throw XISFException.InvalidElement(...)</code>.</li>
+                <li><strong>Post-review change:</strong> at the maintainer's request, hardened
+                    <code>default(XISFGeometry)</code> &mdash; <code>Dimensions</code> is backed by a nullable field whose
+                    getter coalesces null to an empty array, so every derived member is safe on a default value; added a
+                    <code>DefaultGeometryIsSafe</code> test.</li>
+                <li><strong>Result:</strong> <code>dotnet build</code> clean (0 warnings, 0 errors) and
+                    <code>dotnet test</code> green (49 passed, 0 failed) in both Debug and Release; no M1&ndash;M3 regression.</li>
+            </ul>
+        </div>
+        <div class="field"><div class="label">Automated review</div>
+            <p>One review round (fresh-context sub-agent); converged immediately. <strong>No Critical/High/Medium
+            findings.</strong> The reviewer independently rebuilt/re-ran both configs (48/48 pass, 0 warnings), confirmed
+            all 40 tokens and the category mapping, verified <code>FromSpecToken</code> rejects <code>"1"</code>/wrong-case,
+            checked the SpecToken casing and zero-default reordering, and confirmed the geometry parse/overflow handling and
+            culture-invariance. Three <code>Info</code> observations, none requiring action:</p>
+            <ul>
+                <li><strong><code>default(XISFGeometry)</code> has a null <code>Dimensions</code></strong> (Info, Deferred)
+                    &mdash; a C# struct always has an implicit parameterless default on which the derived members would
+                    throw <code>NullReferenceException</code>. Unreachable in practice (nothing constructs a default
+                    geometry) and inherent to C# structs; could be hardened with a null-guard if desired.</li>
+                <li><strong>32-bit <code>int</code> dimensions vs the source's 64-bit</strong> (Info, <em>Resolved</em>)
+                    &mdash; on the maintainer's review the geometry was switched to <code>long</code> throughout, erasing
+                    this divergence (see Review comments).</li>
+                <li><strong><code>FromSpecToken</code> allocates via <code>Enum.GetValues&lt;T&gt;()</code> and scans
+                    linearly</strong> (Info, Deferred) &mdash; immaterial for &le;40-member enums in a read-only parser.</li>
+            </ul>
+        </div>
+        <div class="field"><div class="label">Review comments</div>
+            <ul>
+                <li><strong>Add a null guard for <code>default(XISFGeometry)</code>.</strong> (Change request.) Harden the
+                    struct so its derived members do not throw <code>NullReferenceException</code> on a default-constructed
+                    value. <em>Applied:</em> <code>Dimensions</code> is now backed by a nullable field and its getter
+                    coalesces a null backing array to an empty one, so <code>PixelCount</code>/<code>SampleCount</code>/
+                    <code>ToString()</code>/<code>GetHashCode()</code>/<code>Equals()</code> are all safe on
+                    <code>default(XISFGeometry)</code>. Covered by a new test.</li>
+                <li><strong>Question: why <code>int</code> dimensions rather than <code>long</code> throughout?</strong>
+                    Investigated the DotNetFITS precedent, which parses axis dimensions as <code>long</code>
+                    (<code>FITSSection.Naxis</code>/<code>NaxisAt</code> return <code>long?</code>) and does all size math in
+                    <code>long</code>; <code>int</code> appears there only in the write-side construction API, which the
+                    read-only XISF port lacks. <em>Applied:</em> switched <code>Dimensions</code> and
+                    <code>ChannelCount</code> to <code>long</code> (with <code>long</code> parsing) for consistency with the
+                    already-<code>long</code> products, the sibling's parsed representation, and the source's 64-bit
+                    <code>Int</code>. This also erases the earlier 32-bit-dimension divergence. No <code>MaxDataSize</code>-style
+                    cap was added (the source's geometry has none, and a <code>long</code> product cannot overflow for a
+                    realistic image).</li>
+            </ul>
+        </div>
     </div>
 
     <!-- M5 -->
