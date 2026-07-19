@@ -388,7 +388,7 @@
         <div class="phase">Phase 3 &middot; XML, checksums &amp; compression</div>
         <ol>
             <li><a href="#m6"><span class="num">M6</span> XML parser &mdash; XISFElement &amp; XISFXMLParser</a> <span class="capsule status-completed">Completed</span></li>
-            <li><a href="#m7"><span class="num">M7</span> Checksums</a> <span class="capsule status-not-started">Not started</span></li>
+            <li><a href="#m7"><span class="num">M7</span> Checksums</a> <span class="capsule status-completed">Completed</span></li>
             <li><a href="#m8"><span class="num">M8</span> Compression</a> <span class="capsule status-not-started">Not started</span></li>
         </ol>
 
@@ -986,7 +986,7 @@
     <div class="milestone" id="m7">
         <div class="m-head">
             <h3>M7 &middot; Checksums</h3>
-            <span class="capsule status-not-started">Not started</span>
+            <span class="capsule status-completed">Completed</span>
         </div>
         <div class="field">
             <div class="label">Goal</div>
@@ -1001,11 +1001,83 @@
                 <li class="task">Port the checksum tests (parse, aliases, reject-unknown/malformed, SHA-1/256/512 matches, SHA-3 match adapted for availability, mismatch throws, verify success), reusing the static fixture header block.</li>
             </ul>
         </div>
-        <div class="field"><div class="label">Status</div><span class="capsule status-not-started">Not started</span></div>
-        <div class="field"><div class="label">Completed</div><span class="placeholder">&mdash;</span></div>
-        <div class="field"><div class="label">Implementation notes</div><p class="placeholder">To be filled in during implementation.</p></div>
-        <div class="field"><div class="label">Automated review</div><p class="placeholder">To be filled in during implementation.</p></div>
-        <div class="field"><div class="label">Review comments</div><p class="placeholder">Awaiting human review.</p></div>
+        <div class="field"><div class="label">Status</div><span class="capsule status-completed">Completed</span></div>
+        <div class="field"><div class="label">Completed</div>2026-07-19</div>
+        <div class="field"><div class="label">Implementation notes</div>
+            <p>Implemented with TDD. Wrote the checksum test suite first, then implemented the type to green. Placed under
+            <code>Checksum/</code>, mirroring the source layout.</p>
+            <ul>
+                <li><strong><code>XISFChecksum</code>:</strong> a <code>readonly struct : IEquatable&lt;XISFChecksum&gt;</code>
+                    (consistent with the port's other value types, <code>XISFGeometry</code>/<code>XISFValue</code>) holding the
+                    algorithm and the declared digest. The parsing constructor <code>XISFChecksum(string attribute)</code> splits
+                    the <code>algorithm:digest</code> attribute at the <em>first</em> colon (<code>IndexOf(':')</code>), keeping
+                    any further colons in the digest, and validates in the source's order: unknown algorithm
+                    (<code>Unsupported</code>) before empty digest (<code>InvalidElement</code>); a missing colon is
+                    <code>InvalidElement</code>.</li>
+                <li><strong>Nested <code>Algorithm</code> enum + <code>ChecksumAlgorithm</code> property:</strong> the enum is
+                    nested (as in the source), and the property is named <code>ChecksumAlgorithm</code> rather than
+                    <code>Algorithm</code> because a C# property cannot share the nested type's name &mdash; the same resolution
+                    the DotNetFITS precedent uses (nested <code>Kind</code>, property <code>SectionKind</code>). The members use
+                    the M2 acronym casing (<code>Sha1</code>/<code>Sha256</code>/<code>Sha512</code>/<code>Sha3_256</code>/
+                    <code>Sha3_512</code>; the underscore keeps <code>Sha3_256</code> from reading as a 3256-bit value).</li>
+                <li><strong><code>XISFChecksumAlgorithmExtensions</code> companion</strong> (same file): <code>FromName</code>
+                    (case-insensitive, accepting the hyphenated and unhyphenated spellings via a <code>ToUpperInvariant()</code>
+                    switch &mdash; the CA1308-safe direction) and <code>Name()</code> (canonical spelling), following the M4
+                    <code>FromSpecToken</code>/<code>SpecToken</code> pattern.</li>
+                <li><strong>Digest computation &amp; Q2 SHA-3 gating:</strong> <code>SHA1</code>/<code>SHA256</code>/
+                    <code>SHA512</code> via <code>HashData</code> over the block's <code>ReadOnlyMemory&lt;byte&gt;.Span</code>;
+                    <code>SHA3_256</code>/<code>SHA3_512</code> only when <code>IsSupported</code>, otherwise a clean
+                    <code>XISFException.Unsupported</code> (never a <code>PlatformNotSupportedException</code> and never a silent
+                    pass). Hex is lowercase invariant via <code>Convert.ToHexStringLower</code>; <code>Matches</code> compares the
+                    computed digest against the declared one with <code>StringComparison.OrdinalIgnoreCase</code>, and
+                    <code>Verify</code> throws <code>ChecksumMismatch</code> (the byte count formatted with
+                    <code>CultureInfo.InvariantCulture</code>, not raw-interpolated).</li>
+                <li><strong>Equality &amp; default-safety:</strong> <code>Equals</code>/<code>GetHashCode</code>/<code>==</code>
+                    compare algorithm + digest ordinally (case-sensitive over the stored digest), faithfully mirroring the
+                    source's derived <code>Equatable</code> while keeping <code>Matches</code> case-insensitive. Per the M4
+                    default-struct-safety feedback, the digest backing field is nullable and coalesced to <code>""</code>, so
+                    <code>default(XISFChecksum)</code> is safe; a <code>DefaultChecksumIsSafe</code> test pins it.</li>
+                <li><strong>Tests:</strong> the ported suite plus C#-specific additions
+                    (<code>MatchesUppercaseDigest</code>, <code>Description</code>,
+                    <code>EqualityComparesAlgorithmAndDigest</code>, <code>DefaultChecksumIsSafe</code>). The reference payload
+                    (<code>DE AD BE EF</code>) and its five precomputed hex digests are carried over verbatim (a
+                    <code>python hashlib</code> reference independent of the crypto library).</li>
+                <li><strong>Platform caveat (honest coverage):</strong> on this machine
+                    <code>SHA3_256.IsSupported</code>/<code>SHA3_512.IsSupported</code> are <strong>false</strong>, so
+                    <code>MatchesSha3</code> exercises the graceful-degradation branch (asserting SHA-3 throws
+                    <code>Unsupported</code>) &mdash; the actual SHA-3 <em>digest-match</em> path is not run locally. The
+                    automated reviewer independently confirmed all five reference digests match <code>python3 hashlib</code>
+                    byte-for-byte, so the SHA-3 constants and <code>HashData</code> call are correct; they would be exercised on
+                    a SHA-3-capable platform.</li>
+                <li><strong>Result:</strong> <code>dotnet build</code> clean (0 warnings, 0 errors) and <code>dotnet test</code>
+                    green (88 passed, 0 failed; 15 new) in both Debug and Release; no M1&ndash;M6 regression.</li>
+            </ul>
+        </div>
+        <div class="field"><div class="label">Automated review</div>
+            <p>One review round (fresh-context sub-agent); converged immediately with <strong>no Critical/High/Medium
+            findings</strong>. The reviewer independently rebuilt/re-ran both configs, verified the first-colon split, the
+            validation order, the exact error kinds, the Q2 SHA-3 gate (only invoked when <code>IsSupported</code>, else
+            <code>Unsupported</code>, never silent), the case-sensitivity split (ordinal equality vs case-insensitive matching),
+            the <code>ToString</code> format, default-struct safety, and &mdash; importantly &mdash; that all five reference
+            digests match <code>python3 hashlib</code> byte-for-byte (so the locally-unrunnable SHA-3 happy path uses correct
+            constants). No M1&ndash;M6 regression. Two <code>Info</code> observations, neither requiring a fix:</p>
+            <ul>
+                <li><strong>Public methods can throw</strong> (Info, Deferred) &mdash; <code>Matches</code>/<code>Verify</code>
+                    throw on unavailable SHA-3, against the general &ldquo;avoid throwing from public methods&rdquo; guideline.
+                    This is the explicit Q2 decision (degrade to a clean <code>Unsupported</code> rather than silently passing)
+                    and is documented in the <code>&lt;exception&gt;</code> tags; intentional and faithful.</li>
+                <li><strong><code>FromName(null)</code> would throw <code>NullReferenceException</code></strong> (Info, Deferred)
+                    &mdash; only reachable by a caller ignoring the non-nullable <code>string</code> contract; the internal call
+                    site always passes a non-null substring, matching the source's non-optional parameter.</li>
+            </ul>
+        </div>
+        <div class="field"><div class="label">Review comments</div>
+            <ul>
+                <li>The maintainer reviewed the milestone and approved it as-is (&ldquo;Looks good&rdquo;), with no change
+                    requests. The deferred <code>Info</code> observations (public methods that throw on unavailable SHA-3, and
+                    the non-null <code>FromName</code> contract) were accepted without action.</li>
+            </ul>
+        </div>
     </div>
 
     <!-- M8 -->
