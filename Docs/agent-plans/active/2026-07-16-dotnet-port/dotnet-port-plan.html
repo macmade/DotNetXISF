@@ -398,7 +398,7 @@
             <li><a href="#m10"><span class="num">M10</span> XISFDataBlock</a> <span class="capsule status-completed">Completed</span></li>
             <li><a href="#m11"><span class="num">M11</span> Properties, keywords &amp; metadata</a> <span class="capsule status-completed">Completed</span></li>
             <li><a href="#m12"><span class="num">M12</span> Color &amp; ancillary elements</a> <span class="capsule status-completed">Completed</span></li>
-            <li><a href="#m13"><span class="num">M13</span> XISFImage &amp; thumbnail</a> <span class="capsule status-not-started">Not started</span></li>
+            <li><a href="#m13"><span class="num">M13</span> XISFImage &amp; thumbnail</a> <span class="capsule status-completed">Completed</span></li>
         </ol>
 
         <div class="phase">Phase 5 &middot; File, integration &amp; finalization</div>
@@ -1672,7 +1672,7 @@
     <div class="milestone" id="m13">
         <div class="m-head">
             <h3>M13 &middot; XISFImage &amp; thumbnail</h3>
-            <span class="capsule status-not-started">Not started</span>
+            <span class="capsule status-completed">Completed</span>
         </div>
         <div class="field">
             <div class="label">Goal</div>
@@ -1682,17 +1682,99 @@
         <div class="field">
             <div class="label">Tasks</div>
             <ul class="tasks">
-                <li class="task">Port <code>XISFImage</code>: <code>Geometry</code>, <code>SampleFormat</code>, <code>ColorSpace</code>, <code>PixelStorage</code>, <code>ByteOrder</code>, optional <code>Bounds</code>/<code>ImageType</code>/<code>Orientation</code>/<code>Id</code>/<code>Uuid</code>, nested <code>Properties</code>/<code>Keywords</code>, the optional color/ancillary children (ICC, RGB working space, display function, CFA, resolution, thumbnail), and the pixel <code>XISFDataBlock</code> exposing throwing <code>Data</code>.</li>
-                <li class="task">Implement the strict validations (float image requires <code>bounds</code>; declared pixel byte-count consistent with geometry) and the generic enumerated-value fallback (unknown raw value &rarr; default when lenient, throw when strict), plus the drop-vs-throw handling of malformed child metadata.</li>
-                <li class="task">Port <code>XISFThumbnail</code> (wraps a nested <code>XISFImage</code>; throwing <code>Data</code>; validates 2D, UInt8/16, Gray/RGB, no bounds/CFA/nested thumbnail).</li>
-                <li class="task">Port the image and thumbnail tests (gray/RGB/float parsing, defaults, planar/normal storage, bounds requirement strict/lenient, pixel-size mismatch, identity attributes, nested properties/keywords, child-metadata attach/drop, thumbnail parse and strict rejections).</li>
+                <li class="task done">Port <code>XISFImage</code>: <code>Geometry</code>, <code>SampleFormat</code>, <code>ColorSpace</code>, <code>PixelStorage</code>, <code>ByteOrder</code>, optional <code>Bounds</code>/<code>ImageType</code>/<code>Orientation</code>/<code>Id</code>/<code>Uuid</code>, nested <code>Properties</code>/<code>Keywords</code>, the optional color/ancillary children (ICC, RGB working space, display function, CFA, resolution, thumbnail), and the pixel <code>XISFDataBlock</code> exposing throwing <code>Data</code>.</li>
+                <li class="task done">Implement the strict validations (float image requires <code>bounds</code>; declared pixel byte-count consistent with geometry) and the generic enumerated-value fallback (unknown raw value &rarr; default when lenient, throw when strict), plus the drop-vs-throw handling of malformed child metadata.</li>
+                <li class="task done">Port <code>XISFThumbnail</code> (wraps a nested <code>XISFImage</code>; throwing <code>Data</code>; validates 2D, UInt8/16, Gray/RGB, no bounds/CFA/nested thumbnail).</li>
+                <li class="task done">Port the image and thumbnail tests (gray/RGB/float parsing, defaults, planar/normal storage, bounds requirement strict/lenient, pixel-size mismatch, identity attributes, nested properties/keywords, child-metadata attach/drop, thumbnail parse and strict rejections).</li>
             </ul>
         </div>
-        <div class="field"><div class="label">Status</div><span class="capsule status-not-started">Not started</span></div>
-        <div class="field"><div class="label">Completed</div><span class="placeholder">&mdash;</span></div>
-        <div class="field"><div class="label">Implementation notes</div><p class="placeholder">To be filled in during implementation.</p></div>
-        <div class="field"><div class="label">Automated review</div><p class="placeholder">To be filled in during implementation.</p></div>
-        <div class="field"><div class="label">Review comments</div><p class="placeholder">Awaiting human review.</p></div>
+        <div class="field"><div class="label">Status</div><span class="capsule status-completed">Completed</span></div>
+        <div class="field"><div class="label">Completed</div>2026-07-19</div>
+        <div class="field"><div class="label">Implementation notes</div>
+            <p>Implemented with TDD. Wrote the image and thumbnail test suites first, confirmed they failed to compile (the
+            types did not exist), then implemented to green. Both live under <code>Image/</code> mirroring the source, and
+            both are <code>public sealed class</code> (Swift <code>final class</code>) with lazily-decoded pixel bytes (not
+            thread-safe, via the backing <code>XISFDataBlock</code>).</p>
+            <ul>
+                <li><strong><code>XISFImage</code>:</strong> parses the mandatory <code>geometry</code> (via
+                    <code>XISFGeometry</code>) and <code>sampleFormat</code>; the enumerated
+                    <code>colorSpace</code>/<code>pixelStorage</code>/<code>byteOrder</code> through a generic
+                    default-and-fallback helper; the optional <code>bounds</code> and identity attributes
+                    (<code>imageType</code>/<code>orientation</code>/<code>id</code>/<code>uuid</code>); nested
+                    <code>Properties</code> and <code>Keywords</code>; the six optional child metadata elements; and the pixel
+                    <code>XISFDataBlock</code> exposing a lazy throwing <code>Data</code>. <code>Bounds</code> is modeled as a
+                    <code>( double Low, double High )?</code> tuple (following <code>XISFValue.AsComplex</code>).</li>
+                <li><strong>Generic enumerated-value fallback:</strong> <code>EnumeratedValue&lt;T&gt;( &hellip;, Func&lt;string, T?&gt; fromToken, &hellip; ) where T : struct</code>
+                    returns the default when the attribute is absent, parses a known token, falls back to the default for an
+                    unknown token under lenient, and throws under strict &mdash; the C# analog of the source's generic
+                    <code>RawRepresentable</code> helper, closing over each enum's <code>FromSpecToken</code>/<code>Default</code>.</li>
+                <li><strong>Optional-child drop-vs-throw:</strong> two helpers &mdash;
+                    <code>OptionalValueChild&lt;T&gt; where T : struct</code> (for the four struct children) and
+                    <code>OptionalReferenceChild&lt;T&gt; where T : class</code> (for ICC profile and thumbnail), split because
+                    C# cannot overload on the class-vs-struct constraint. Each finds the first named child, returns
+                    <code>null</code> when absent, drops a parse failure (catching only <code>XISFException</code>) under
+                    lenient, and rethrows under strict &mdash; matching the source's <code>optionalChild</code>.</li>
+                <li><strong>Properties vs keywords asymmetry (faithful):</strong> <code>Properties</code> uses
+                    <code>XISFProperty.ParseList</code> (a malformed property is dropped under lenient), whereas
+                    <code>Keywords</code> is a direct map &mdash; a malformed keyword is always fatal (its name checks are
+                    themselves relaxed under lenient), mirroring the source's <code>try children.map { try &hellip; }</code>.
+                    Both are exposed copy-on-read.</li>
+                <li><strong>Strict validations:</strong> a floating-point sample format requires <code>bounds</code>; the
+                    declared pixel byte count (<code>Geometry.SampleCount &times; SampleFormat.BytesPerSample()</code>) must
+                    equal the block's <code>UncompressedSize</code> when it is known without resolving an external block. The
+                    size product is computed only inside that size-check branch, so it is never evaluated for an external block
+                    of unknown size (strictly narrower than the source, which computes it unconditionally). This inherits, and
+                    does not widen, the M4-accepted geometry-product overflow behavior.</li>
+                <li><strong><code>XISFThumbnail</code>:</strong> wraps a nested <code>XISFImage</code>; under strict parsing
+                    enforces UInt8/UInt16, Gray/RGB, two-dimensional, no <code>bounds</code>, no child
+                    <code>ColorFilterArray</code> and no nested <code>Thumbnail</code> (each relaxed under lenient);
+                    <code>Data</code>/<code>ToString</code> delegate to the backing image.</li>
+                <li><strong>Culture-invariance:</strong> the <code>bounds</code> doubles parse with
+                    <code>NumberStyles.Float</code>/<code>InvariantCulture</code>; the size-mismatch message and the
+                    <code>ToString</code> dimensions format every number invariantly (no raw interpolation). Added a fr-FR
+                    <code>ParsingIsCultureInvariant</code> test over <code>bounds</code>.</li>
+                <li><strong>Post-review fix (Medium):</strong> <code>ParseBounds</code> initially rejected with
+                    <code>low &gt; high</code>, which &mdash; unlike the source's <code>low &le; high</code> guard &mdash;
+                    silently accepted a NaN <code>bounds</code> component under strict parsing. Changed the predicate to
+                    <code>( low &le; high ) == false</code> so a NaN component (satisfying neither comparison) is rejected,
+                    matching the source; added a <code>RejectsMalformedBounds</code> test covering <code>1:0</code>,
+                    <code>NaN:NaN</code>, <code>NaN:1</code> and <code>1:NaN</code>.</li>
+                <li><strong>Result:</strong> <code>dotnet build</code> clean (0 warnings, 0 errors) and <code>dotnet test</code>
+                    green (248 passed, 0 failed; 25 new) in both Debug and Release; no M1&ndash;M12 regression.</li>
+            </ul>
+        </div>
+        <div class="field"><div class="label">Automated review</div>
+            <p>Two review rounds, each a fresh-context sub-agent reviewing the uncommitted changes cold. Round&nbsp;1 raised one
+            <code>Medium</code> finding, which was fixed; round&nbsp;2 (re-reviewing the fixed state) confirmed the fix and
+            reported <strong>no remaining Critical/High/Medium findings</strong>, so the loop converged. Both rounds
+            independently rebuilt/re-ran Debug and Release (0 warnings) and confirmed the enumerated-value helper, the
+            value/reference optional-child split, the properties-drop/keywords-fatal asymmetry, the pixel-size validation, the
+            thumbnail restriction branches, culture-invariance and copy-on-read.</p>
+            <ul>
+                <li><strong>NaN <code>bounds</code> accepted under strict parsing</strong> (Medium, <em>Fixed</em>,
+                    round&nbsp;1) &mdash; <code>ParseBounds</code>'s <code>low &gt; high</code> reject predicate diverged from
+                    the source's <code>low &le; high</code> guard for a NaN component. Fixed to
+                    <code>( low &le; high ) == false</code>; round&nbsp;2 verified <code>NaN:NaN</code>/<code>NaN:1</code>/
+                    <code>1:NaN</code>/<code>1:0</code> are rejected and valid/infinite ranges accepted, matching the source.</li>
+                <li><strong><code>bounds</code> tolerates surrounding whitespace</strong> (Low, Deferred) &mdash;
+                    <code>NumberStyles.Float</code> includes the whitespace flags, so <code>bounds=" 0:1 "</code> parses where
+                    the source's <code>Double()</code> rejects it. The established double-parsing convention (from M5), only
+                    <em>more</em> accepting; no action.</li>
+                <li><strong>Optional-child helpers catch only <code>XISFException</code></strong> (Info, Deferred) &mdash;
+                    intentional; a non-<code>XISFException</code> (e.g. a hostile-geometry <code>OverflowException</code>)
+                    propagates even under lenient, consistent with the M4-accepted geometry-overflow behavior.</li>
+                <li><strong>Coverage completeness for <code>1:NaN</code></strong> (Info, <em>Fixed</em>, round&nbsp;2) &mdash;
+                    added the reverse-position NaN case to <code>RejectsMalformedBounds</code>.</li>
+            </ul>
+        </div>
+        <div class="field"><div class="label">Review comments</div>
+            <ul>
+                <li>The maintainer reviewed the milestone and approved it as-is (&ldquo;Looks good&rdquo;). The round-1
+                    <code>Medium</code> NaN-<code>bounds</code> fix (matching the source's <code>low &le; high</code> guard) was
+                    accepted, along with the deferred <code>Low</code>/<code>Info</code> items (the whitespace-tolerant
+                    <code>bounds</code> parsing and the <code>XISFException</code>-only optional-child catch).</li>
+            </ul>
+        </div>
     </div>
 
     <div class="phase-banner">Phase 5 &middot; File, integration &amp; finalization</div>
