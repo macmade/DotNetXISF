@@ -389,7 +389,7 @@
         <ol>
             <li><a href="#m6"><span class="num">M6</span> XML parser &mdash; XISFElement &amp; XISFXMLParser</a> <span class="capsule status-completed">Completed</span></li>
             <li><a href="#m7"><span class="num">M7</span> Checksums</a> <span class="capsule status-completed">Completed</span></li>
-            <li><a href="#m8"><span class="num">M8</span> Compression</a> <span class="capsule status-not-started">Not started</span></li>
+            <li><a href="#m8"><span class="num">M8</span> Compression</a> <span class="capsule status-completed">Completed</span></li>
         </ol>
 
         <div class="phase">Phase 4 &middot; Data blocks, properties &amp; imaging</div>
@@ -1084,7 +1084,7 @@
     <div class="milestone" id="m8">
         <div class="m-head">
             <h3>M8 &middot; Compression</h3>
-            <span class="capsule status-not-started">Not started</span>
+            <span class="capsule status-completed">Completed</span>
         </div>
         <div class="field">
             <div class="label">Goal</div>
@@ -1101,11 +1101,91 @@
                 <li class="task">Copy the verbatim hex-encoded compressed-stream fixtures and port all compression tests (codec/shuffle/subblock parsing, decompress per codec, shuffle at item-sizes 2/4, subblocks, throws on short/corrupt stream, throws on size mismatch).</li>
             </ul>
         </div>
-        <div class="field"><div class="label">Status</div><span class="capsule status-not-started">Not started</span></div>
-        <div class="field"><div class="label">Completed</div><span class="placeholder">&mdash;</span></div>
-        <div class="field"><div class="label">Implementation notes</div><p class="placeholder">To be filled in during implementation.</p></div>
-        <div class="field"><div class="label">Automated review</div><p class="placeholder">To be filled in during implementation.</p></div>
-        <div class="field"><div class="label">Review comments</div><p class="placeholder">Awaiting human review.</p></div>
+        <div class="field"><div class="label">Status</div><span class="capsule status-completed">Completed</span></div>
+        <div class="field"><div class="label">Completed</div>2026-07-19</div>
+        <div class="field"><div class="label">Implementation notes</div>
+            <p>Implemented with TDD. Wrote the compression test suite first (using the verbatim third-party-encoder
+            fixtures), then implemented the type to green. Placed under <code>Compression/</code>, mirroring the source.</p>
+            <ul>
+                <li><strong>Managed NuGet dependencies (Q1):</strong> added <code>K4os.Compression.LZ4</code> (1.3.8, for
+                    lz4/lz4hc) and <code>ZstdSharp.Port</code> (0.8.8, for zstd) to <code>DotNetXISF.csproj</code> &mdash; both
+                    pure-managed, MIT, cross-platform. No <code>.slnx</code> change (no new project) and no
+                    <code>ci-win.yaml</code> change (the CI runs <code>dotnet test</code>, which restores the packages), so both
+                    stay consistent. zlib needs no package (base class library <code>ZLibStream</code>).</li>
+                <li><strong><code>XISFCompression</code>:</strong> a <code>readonly struct : IEquatable&lt;XISFCompression&gt;</code>
+                    with a nested <code>Codec</code> enum (<code>Zlib</code>/<code>Lz4</code>/<code>Lz4Hc</code>/<code>Zstd</code>),
+                    a nested <code>readonly struct Subblock</code>, and the <code>CompressionCodec</code> property (nested-enum +
+                    property-name precedent, as in M7). A companion <code>XISFCompressionCodecExtensions</code>
+                    (<code>FromName</code>/<code>Name</code>) parses/formats the codec token &mdash; case-<em>sensitive</em> ordinal,
+                    matching the source's exact raw-value match. Sub-blocks are exposed copy-on-read
+                    (<code>Subblocks =&gt; this.subblocks?.ToArray()</code>) per the M6 feedback.</li>
+                <li><strong>Attribute grammar:</strong> <code>Split(':')</code> keeps empty entries (matching the source's
+                    <code>omittingEmptySubsequences:&nbsp;false</code>), so <code>zlib:</code> is two parts and fails the size
+                    parse; <code>+sh</code> suffix detection/stripping is ordinal; sizes parse invariantly with
+                    <code>NumberStyles.AllowLeadingSign</code> and are range-checked (<code>uncompressedSize &ge; 0</code>,
+                    positive item size, exactly 3 parts when shuffled / 2 when not). All failures are
+                    <code>DecompressionError</code>. Sizes are <code>int</code> (a decoded buffer is a <code>byte[]</code>,
+                    int-indexed; an over-large declared value is cleanly rejected by <code>int.TryParse</code>).</li>
+                <li><strong>Decode pipeline:</strong> zlib via <code>ZLibStream</code> (consumes the RFC&nbsp;1950 wrapper
+                    directly, <code>ReadExactly</code> into an <code>expectedSize</code> buffer); lz4/lz4hc via
+                    <code>LZ4Codec.Decode</code> into the declared size (returns <code>-1</code> on corruption &rarr; rejected by
+                    the <code>decoded != expectedSize</code> check); zstd via <code>ZstdSharp.Decompressor.Unwrap(src, dest)</code>.
+                    Byte-unshuffle reproduces the source formula exactly
+                    (<code>result[i] = bytes[(i % itemSize) * items + (i / itemSize)]</code>, trailing partial item unchanged);
+                    sub-blocks decode each slice to its declared size, concatenate, and the total is length-validated against
+                    <code>UncompressedSize</code> (sub-block offset/length arithmetic uses <code>long</code> intermediates with an
+                    <code>int.MaxValue</code> guard so overflow checks never trip).</li>
+                <li><strong>zstd interop (the milestone's sharpest edge, verified empirically before coding):</strong>
+                    <code>Decompressor.Unwrap(src, maxSize)</code> <em>throws</em> when a small block's frame estimates its
+                    content size as the window size (e.g. 131072) exceeding the passed max, and <code>Unwrap(src)</code> with no
+                    max is an unbounded decompression-bomb risk. The port uses the
+                    <code>Unwrap(ReadOnlySpan&lt;byte&gt; src, Span&lt;byte&gt; dest)</code> overload with a destination of
+                    exactly <code>expectedSize</code>: bounded (no bomb), fully managed (no <code>unsafe</code>), returns the
+                    actual written count, and throws <code>ZstdException</code> (caught) on corruption or a too-small
+                    destination &mdash; mirroring the source's fixed-buffer <code>ZSTD_decompress(dest, expectedSize, &hellip;)</code>.</li>
+                <li><strong>Fixtures prove interop, not self-round-trips:</strong> the compressed fixtures are genuine
+                    third-party-encoder output (python <code>zlib</code>, <code>liblz4</code> raw blocks, the zstd CLI v1.5.7),
+                    carried over verbatim, so the decode tests demonstrate interoperability with real XISF producers.</li>
+                <li><strong>Post-review addition:</strong> added a <code>FormattingIsCultureInvariant</code> (fr-FR) test, as the
+                    repo-root <code>.editorconfig</code> requires for any milestone that formats numbers (and as
+                    <code>XISFValue</code> did in M5). Also added <code>Description</code>, <code>EqualityComparesAllComponents</code>
+                    and <code>DefaultCompressionIsSafe</code> tests on top of the ported suite.</li>
+                <li><strong>Result:</strong> <code>dotnet build</code> clean (0 warnings, 0 errors) and <code>dotnet test</code>
+                    green (110 passed, 0 failed; 22 new) in both Debug and Release; no M1&ndash;M7 regression.</li>
+            </ul>
+        </div>
+        <div class="field"><div class="label">Automated review</div>
+            <p>One review round (fresh-context sub-agent); converged with <strong>no Critical/High/Medium findings</strong>. The
+            reviewer verified both third-party package APIs by reflection and empirical decode, rebuilt/re-ran both configs, and
+            confirmed: the zstd bounded-destination resolution is correct and closes the decompression-bomb risk; the lz4
+            corrupt path is safe (returns <code>-1</code> &rarr; rejected) without needing a try/catch; the zlib wrapper/short/
+            corrupt handling; the grammar, byte-unshuffle math and sub-block arithmetic (no unexpected
+            <code>OverflowException</code> under overflow checks); disposal, copy-on-read, default-safety, <code>ToString</code>
+            parity and value equality; and that the csproj adds exactly the two intended packages with no CI change needed. No
+            M1&ndash;M7 regression. Three findings:</p>
+            <ul>
+                <li><strong>Missing culture-invariance test</strong> (Low, <em>Fixed</em>) &mdash; the <code>.editorconfig</code>
+                    requires a non-invariant-culture test for any number-formatting milestone; added
+                    <code>FormattingIsCultureInvariant</code> (fr-FR). The code itself was already correct (invariant parse and
+                    format throughout).</li>
+                <li><strong>Output buffers allocated from declared sizes before decoding</strong> (Info, Deferred) &mdash; a
+                    bounded (never unbounded) pre-decode allocation from the file's declared <code>uncompressedSize</code>;
+                    byte-for-byte the same as the source's fixed-buffer design, best cross-checked at a higher layer against the
+                    actual file size. Not a bomb.</li>
+                <li><strong>Under-declared single zlib stream truncates silently</strong> (Info, Deferred) &mdash; if a zlib
+                    stream's actual content exceeds its declared size, <code>ReadExactly</code> reads exactly the declared size
+                    and the outer check passes; this exactly matches the source's <code>compression_decode_buffer</code>
+                    behavior (lz4/zstd instead reject it). An obscure malformed-file case; faithful, not a regression.</li>
+            </ul>
+        </div>
+        <div class="field"><div class="label">Review comments</div>
+            <ul>
+                <li>The maintainer reviewed the milestone and approved it as-is (&ldquo;Looks good&rdquo;), with no change
+                    requests. The deferred <code>Info</code> observations (bounded pre-decode allocation from the declared size,
+                    and the under-declared single-zlib-stream truncation &mdash; both faithful to the source) were accepted
+                    without action.</li>
+            </ul>
+        </div>
     </div>
 
     <div class="phase-banner">Phase 4 &middot; Data blocks, properties &amp; imaging</div>
