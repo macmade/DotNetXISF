@@ -387,7 +387,7 @@
 
         <div class="phase">Phase 3 &middot; XML, checksums &amp; compression</div>
         <ol>
-            <li><a href="#m6"><span class="num">M6</span> XML parser &mdash; XISFElement &amp; XISFXMLParser</a> <span class="capsule status-not-started">Not started</span></li>
+            <li><a href="#m6"><span class="num">M6</span> XML parser &mdash; XISFElement &amp; XISFXMLParser</a> <span class="capsule status-completed">Completed</span></li>
             <li><a href="#m7"><span class="num">M7</span> Checksums</a> <span class="capsule status-not-started">Not started</span></li>
             <li><a href="#m8"><span class="num">M8</span> Compression</a> <span class="capsule status-not-started">Not started</span></li>
         </ol>
@@ -883,7 +883,7 @@
     <div class="milestone" id="m6">
         <div class="m-head">
             <h3>M6 &middot; XML parser &mdash; XISFElement &amp; XISFXMLParser</h3>
-            <span class="capsule status-not-started">Not started</span>
+            <span class="capsule status-completed">Completed</span>
         </div>
         <div class="field">
             <div class="label">Goal</div>
@@ -898,11 +898,88 @@
                 <li class="task">Port the parser tests (element tree, nested children, default- and prefixed-namespace resolution to local names, no-namespace reporting, rejects-malformed-XML).</li>
             </ul>
         </div>
-        <div class="field"><div class="label">Status</div><span class="capsule status-not-started">Not started</span></div>
-        <div class="field"><div class="label">Completed</div><span class="placeholder">&mdash;</span></div>
-        <div class="field"><div class="label">Implementation notes</div><p class="placeholder">To be filled in during implementation.</p></div>
-        <div class="field"><div class="label">Automated review</div><p class="placeholder">To be filled in during implementation.</p></div>
-        <div class="field"><div class="label">Review comments</div><p class="placeholder">Awaiting human review.</p></div>
+        <div class="field"><div class="label">Status</div><span class="capsule status-completed">Completed</span></div>
+        <div class="field"><div class="label">Completed</div>2026-07-19</div>
+        <div class="field"><div class="label">Implementation notes</div>
+            <p>Implemented with TDD. Wrote the parser test suite first, then implemented the two internal types to green.
+            Both live under <code>Core/</code>, mirroring the source layout, and are internal implementation details reached
+            from the tests via the existing <code>InternalsVisibleTo</code>.</p>
+            <ul>
+                <li><strong>Naming (M2 acronym-casing convention):</strong> the parser is named <code>XISFXmlParser</code> (not
+                    <code>XISFXMLParser</code>) and the element's namespace property is <code>NamespaceUri</code> &mdash;
+                    applying the .NET-idiomatic three-or-more-letter acronym casing the maintainer approved in M2, which
+                    explicitly called out the XML parser as an example. The established all-caps <code>XISF</code> prefix is
+                    kept, and the error factory is <code>XISFException.MalformedXml</code>.</li>
+                <li><strong><code>XISFElement</code>:</strong> an <code>internal sealed class</code> with <code>Name</code>,
+                    <code>NamespaceUri</code>, an <code>IReadOnlyDictionary&lt;string, string&gt;</code> of
+                    <code>Attributes</code> (keyed by local name), a read-only <code>Children</code> list appended to via
+                    <code>AppendChild</code>, character <code>Content</code> accumulated through a private
+                    <code>StringBuilder</code> via <code>AppendContent</code>, a <code>TrimmedContent</code> (whitespace and
+                    newlines removed, via <code>string.Trim()</code>), and a <code>ChildrenNamed(name)</code> filter. The Swift
+                    <code>children(named:)</code> method becomes <code>ChildrenNamed</code> because C# cannot carry both a
+                    <code>Children</code> property and a <code>Children(string)</code> method.</li>
+                <li><strong><code>XISFXmlParser</code>:</strong> an <code>internal static</code> class with a single
+                    <code>Parse(xml) : XISFElement</code>, ported over <code>System.Xml.XmlReader</code> as a pull loop
+                    (rather than a SAX delegate). Namespace-aware by default, so <code>reader.LocalName</code> gives the local
+                    name and <code>reader.NamespaceURI</code> the namespace; an empty namespace is normalized to
+                    <code>null</code>. Attributes are collected into an ordinal-keyed dictionary, <em>skipping</em> the
+                    <code>xmlns</code> declarations (attributes in the <code>http://www.w3.org/2000/xmlns/</code> namespace) so
+                    they are not surfaced as regular attributes &mdash; matching Foundation's namespace-aware parser, which
+                    consumes them as namespace machinery.</li>
+                <li><strong>Pull-loop correctness:</strong> empty elements report no <code>EndElement</code>, so an element is
+                    pushed onto the open-element stack only when <code>IsEmptyElement</code> is false; <code>EndElement</code>
+                    pops. Text/CDATA/whitespace nodes append to the current open element. <code>IsEmptyElement</code> is read
+                    after the attribute cursor is restored with <code>MoveToElement()</code>.</li>
+                <li><strong>Safe by construction:</strong> <code>DtdProcessing.Prohibit</code> and
+                    <code>XmlResolver = null</code> mean any <code>&lt;!DOCTYPE&gt;</code> throws and no external entity or DTD
+                    is ever resolved &mdash; closing XXE and billion-laughs. A <code>&lt;!DOCTYPE&gt;</code> rejection test was
+                    added on top of the ported suite to pin this.</li>
+                <li><strong>Error mapping:</strong> the whole read is wrapped so any <code>XmlException</code> (malformed XML,
+                    prohibited DTD) becomes <code>XISFException.MalformedXml</code>; an absent root also throws
+                    <code>MalformedXml</code>. Empty, non-XML and unclosed-tag inputs are all rejected.</li>
+                <li><strong>Post-review change (human):</strong> the <code>Children</code> and <code>Attributes</code>
+                    accessors no longer expose the live backing collections &mdash; each read returns a fresh snapshot
+                    (<code>children.ToList()</code>, a copied <code>Dictionary</code>), following the DotNetFITS precedent
+                    (<code>Sections</code>/<code>Properties => &hellip;.ToList()</code>) so a consumer cannot downcast and mutate
+                    the element's internal state. A <code>ChildrenAndAttributesAreSnapshots</code> test pins the guarantee.</li>
+                <li><strong>Result:</strong> <code>dotnet build</code> clean (0 warnings, 0 errors) and <code>dotnet test</code>
+                    green (73 passed, 0 failed; 8 new) in both Debug and Release; no M1&ndash;M5 regression.</li>
+            </ul>
+        </div>
+        <div class="field"><div class="label">Automated review</div>
+            <p>One review round (fresh-context sub-agent); converged immediately with <strong>no Critical/High/Medium
+            findings</strong>. The reviewer independently rebuilt/re-ran both configs, confirmed the local-name/namespace
+            handling, the <code>xmlns</code>-declaration filtering, the empty-element/stack balance, ordinal comparisons, and
+            &mdash; importantly &mdash; that the DTD-prohibited + null-resolver posture genuinely closes XXE/billion-laughs, with
+            no M1&ndash;M5 regression. Three <code>Low</code>/<code>Info</code> notes, none requiring a fix:</p>
+            <ul>
+                <li><strong><code>Parse(null)</code> throws <code>ArgumentNullException</code>, not <code>XISFException</code></strong>
+                    (Low, Deferred) &mdash; only reachable by a caller that ignores the non-nullable <code>string</code>
+                    contract; the Swift original likewise takes a non-optional string, so a conforming caller never hits it. An
+                    explicit <code>ArgumentNullException.ThrowIfNull</code> would document the precondition if desired.</li>
+                <li><strong><code>Children</code>/<code>Attributes</code> expose the live backing collections</strong> (Info,
+                    <em>Fixed on human review</em>) &mdash; originally returned <code>IReadOnly*</code> over the live
+                    <code>List</code>/<code>Dictionary</code>. On the maintainer's request, changed to copy-on-read snapshots
+                    following the DotNetFITS precedent (see Implementation notes and Review comments).</li>
+                <li><strong>Redundant double-dispose of the <code>StringReader</code></strong> (Info, Deferred) &mdash;
+                    <code>CloseInput = true</code> plus the <code>using</code> both dispose it; harmless (dispose is idempotent).</li>
+            </ul>
+        </div>
+        <div class="field"><div class="label">Review comments</div>
+            <ul>
+                <li><strong>Do not expose the live backing collections</strong> (re: automated-review note&nbsp;2). The sibling
+                    DotNetFITS port already addressed this; follow its precedent so <code>Children</code>/<code>Attributes</code>
+                    cannot be downcast and mutated.</li>
+                <li><strong>Question: why the redundant double-dispose of the <code>StringReader</code></strong> (re:
+                    automated-review note&nbsp;3)? Why set <code>CloseInput = true</code> and also wrap the reader in a
+                    <code>using</code>? <em>Answered:</em> it was redundant &mdash; the explicit <code>using</code> already
+                    disposes the reader, so <code>CloseInput = true</code> added nothing. The maintainer confirmed removing
+                    <code>CloseInput = true</code>, keeping the <code>using</code> statements as the clear ownership pattern.
+                    <em>Applied.</em></li>
+                <li>After both changes, the maintainer reviewed the milestone again and approved it as-is
+                    (&ldquo;Looks good&rdquo;).</li>
+            </ul>
+        </div>
     </div>
 
     <!-- M7 -->
