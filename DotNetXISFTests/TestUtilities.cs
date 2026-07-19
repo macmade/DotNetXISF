@@ -155,6 +155,63 @@ public class TestUtilities
     }
 
     /// <summary>
+    /// Builds a minimal single-node XISF data blocks file (<c>.xisb</c>) whose block
+    /// index contains one element with the given id, pointing to
+    /// <paramref name="payload"/>.
+    /// </summary>
+    /// <remarks>
+    /// The layout is the 16-byte header, a 16-byte node header (element count 1, a
+    /// zero next-node pointer), one 40-byte block index element, then the payload -
+    /// so the payload sits at position 72. All integer fields are little-endian.
+    /// </remarks>
+    /// <param name="id">The block index element's unique identifier.</param>
+    /// <param name="payload">The block's bytes.</param>
+    /// <returns>The assembled data blocks file bytes.</returns>
+    public static ReadOnlyMemory< byte > DataBlocksFile( ulong id, ReadOnlyMemory< byte > payload )
+    {
+        const ulong  position = 72;
+        List< byte > data     = new List< byte >();
+
+        data.AddRange( Encoding.ASCII.GetBytes( "XISB0100" ) );      // signature (8)
+        data.AddRange( new byte[ 8 ] );                             // reserved (8)
+        data.AddRange( LittleEndianBytes( ( uint )1 ) );            // element count
+        data.AddRange( new byte[ 4 ] );                             // reserved (4)
+        data.AddRange( LittleEndianBytes( ( ulong )0 ) );          // next node (none)
+        data.AddRange( LittleEndianBytes( id ) );                  // unique id
+        data.AddRange( LittleEndianBytes( position ) );            // block position
+        data.AddRange( LittleEndianBytes( ( ulong )payload.Length ) ); // block length
+        data.AddRange( LittleEndianBytes( ( ulong )0 ) );          // uncompressed length
+        data.AddRange( new byte[ 8 ] );                             // reserved (8)
+        data.AddRange( payload.ToArray() );                         // payload
+
+        return data.ToArray();
+    }
+
+    /// <summary>Encodes a 32-bit unsigned integer as little-endian bytes.</summary>
+    /// <param name="value">The value to encode.</param>
+    /// <returns>The four little-endian bytes.</returns>
+    private static byte[] LittleEndianBytes( uint value )
+    {
+        byte[] bytes = new byte[ 4 ];
+
+        BinaryPrimitives.WriteUInt32LittleEndian( bytes, value );
+
+        return bytes;
+    }
+
+    /// <summary>Encodes a 64-bit unsigned integer as little-endian bytes.</summary>
+    /// <param name="value">The value to encode.</param>
+    /// <returns>The eight little-endian bytes.</returns>
+    private static byte[] LittleEndianBytes( ulong value )
+    {
+        byte[] bytes = new byte[ 8 ];
+
+        BinaryPrimitives.WriteUInt64LittleEndian( bytes, value );
+
+        return bytes;
+    }
+
+    /// <summary>
     /// Removes a temporary file created by a test, ignoring any failure.
     /// </summary>
     /// <remarks>

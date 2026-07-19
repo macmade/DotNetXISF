@@ -394,7 +394,7 @@
 
         <div class="phase">Phase 4 &middot; Data blocks, properties &amp; imaging</div>
         <ol>
-            <li><a href="#m9"><span class="num">M9</span> Data-block location &amp; <code>.xisb</code> index</a> <span class="capsule status-not-started">Not started</span></li>
+            <li><a href="#m9"><span class="num">M9</span> Data-block location &amp; <code>.xisb</code> index</a> <span class="capsule status-completed">Completed</span></li>
             <li><a href="#m10"><span class="num">M10</span> XISFDataBlock</a> <span class="capsule status-not-started">Not started</span></li>
             <li><a href="#m11"><span class="num">M11</span> Properties, keywords &amp; metadata</a> <span class="capsule status-not-started">Not started</span></li>
             <li><a href="#m12"><span class="num">M12</span> Color &amp; ancillary elements</a> <span class="capsule status-not-started">Not started</span></li>
@@ -1194,7 +1194,7 @@
     <div class="milestone" id="m9">
         <div class="m-head">
             <h3>M9 &middot; Data-block location &amp; <code>.xisb</code> index</h3>
-            <span class="capsule status-not-started">Not started</span>
+            <span class="capsule status-completed">Completed</span>
         </div>
         <div class="field">
             <div class="label">Goal</div>
@@ -1209,11 +1209,87 @@
                 <li class="task">Port the location tests (inline/embedded/attachment/url/path parsing, parentheses, external detection, malformed rejection) and the synthetic-index builders needed by M10's external tests.</li>
             </ul>
         </div>
-        <div class="field"><div class="label">Status</div><span class="capsule status-not-started">Not started</span></div>
-        <div class="field"><div class="label">Completed</div><span class="placeholder">&mdash;</span></div>
-        <div class="field"><div class="label">Implementation notes</div><p class="placeholder">To be filled in during implementation.</p></div>
-        <div class="field"><div class="label">Automated review</div><p class="placeholder">To be filled in during implementation.</p></div>
-        <div class="field"><div class="label">Review comments</div><p class="placeholder">Awaiting human review.</p></div>
+        <div class="field"><div class="label">Status</div><span class="capsule status-completed">Completed</span></div>
+        <div class="field"><div class="label">Completed</div>2026-07-19</div>
+        <div class="field"><div class="label">Implementation notes</div>
+            <p>Implemented with TDD, in two parts, both under <code>DataBlock/</code> mirroring the source.</p>
+            <ul>
+                <li><strong><code>XISFDataBlockLocation</code>:</strong> a <code>readonly struct : IEquatable&lt;&hellip;&gt;</code>
+                    modeling the source's six-case discriminated union, following the M5 <code>XISFValue</code> pattern &mdash; a
+                    nested <code>Kind</code> discriminator, static factories mirroring the source case names
+                    (<code>Inline</code>/<code>Embedded</code>/<code>Attachment</code>/<code>Url</code>/<code>AbsolutePath</code>/
+                    <code>HeaderRelativePath</code>), typed nullable accessors, and value equality. The <code>url</code> case's
+                    accessor is <code>ExternalUrl</code> because a property may not share the <code>Url</code> factory's name
+                    (the same collision M5 resolved with an <code>As</code> prefix). A nested <code>Encoding</code> enum
+                    (<code>Base64</code>/<code>Hex</code>) with private token helpers; the index id is a <code>ulong?</code>
+                    (M2 casing: <code>Url</code>/<code>IndexId</code>).</li>
+                <li><strong>Location grammar (faithful to the source):</strong> the external branch triggers on the
+                    <code>url(</code>/<code>path(</code> prefix <em>before</em> splitting on <code>:</code>; the resource is
+                    everything from the first <code>(</code> to the <em>last</em> <code>)</code> (so a path may contain literal
+                    parentheses); <code>@header_dir/</code> is stripped to a header-relative path; the trailing
+                    <code>:index-id</code> parses as decimal (<code>NumberStyles.None</code>) or <code>0x</code>/<code>0X</code>
+                    hex (<code>AllowHexSpecifier</code>), invariant; <code>inline</code> needs exactly two parts and a known
+                    encoding, <code>embedded</code> exactly one, <code>attachment</code> exactly three with non-negative
+                    position and size. All failures are <code>DataBlockError</code>. A URL is validated with
+                    <code>Uri.TryCreate(&hellip;, UriKind.Absolute)</code> (a <code>url(...)</code> resource is only useful when
+                    absolute; both tested URLs round-trip through <code>AbsoluteUri</code> byte-for-byte). <code>ToString</code>
+                    renders the <code>location</code> attribute form, with the index id in <em>decimal</em>.</li>
+                <li><strong><code>XISFDataBlocksFile</code> (internal <code>static</code>):</strong> the <code>XISB0100</code>
+                    reader &mdash; signature check, then a singly-linked walk of block index nodes (32-bit count, 64-bit
+                    next-node position) over 40-byte little-endian elements (64-bit id/position/length), with cycle detection
+                    (a visited set) and a not-found error. Reuses the M3 <code>LittleEndianInteger&lt;T&gt;</code>/<code>Bytes</code>
+                    helpers (which throw <code>DataError</code> out of bounds).</li>
+                <li><strong>Hostile-file overflow safety:</strong> node positions are kept as <code>ulong</code> from the file;
+                    every <code>(int)</code> cast is guarded by a prior range check (position &le; <code>data.Length</code> &le;
+                    <code>int.MaxValue</code>), element offsets use a <code>long</code> index and a header/field-fit guard, and the
+                    located block's <code>ulong</code> position/length are range-checked before casting &mdash; so a malformed or
+                    hostile file yields a clean <code>XISFException</code>, never an <code>OverflowException</code> under the
+                    project's overflow checks. (The source's <code>Int(UInt64)</code> conversions would trap on an out-of-range
+                    value; the port sidesteps that.)</li>
+                <li><strong>Test infrastructure:</strong> added a reusable <code>TestUtilities.DataBlocksFile(id, payload)</code>
+                    builder (16-byte header + 16-byte node header + one 40-byte element + payload, payload at position 72, all
+                    little-endian) matching the source's M10 helper exactly, plus two little-endian encode helpers, so M10's
+                    external tests can reuse it.</li>
+                <li><strong>Tests:</strong> the ported location suite plus a direct <code>XISFDataBlocksFile</code> suite
+                    (resolve-by-id, bad signature, unknown id, truncated element, cyclic index, out-of-bounds block) covering the
+                    reader now rather than deferring it to M10; plus <code>AccessorsExposePayloads</code>,
+                    <code>Description</code> and <code>DefaultLocationIsSafe</code>.</li>
+                <li><strong>Post-review addition:</strong> added a <code>ParsingIsCultureInvariant</code> (fr-FR) test, required
+                    by the repo-root <code>.editorconfig</code> for any milestone that parses/formats numbers (M9 parses
+                    attachment offsets and index ids and formats them).</li>
+                <li><strong>Result:</strong> <code>dotnet build</code> clean (0 warnings, 0 errors) and <code>dotnet test</code>
+                    green (130 passed, 0 failed; 20 new) in both Debug and Release; no M1&ndash;M8 regression.</li>
+            </ul>
+        </div>
+        <div class="field"><div class="label">Automated review</div>
+            <p>One review round (fresh-context sub-agent); converged after the fix with <strong>no Critical/High findings</strong>.
+            The reviewer confirmed the location grammar and <code>ToString</code> parity (index id in decimal), the
+            name-collision handling, default-struct safety, the builder byte layout, and &mdash; the focus area &mdash;
+            traced every <code>.xisb</code> arithmetic path under overflow checks and found the hostile-file handling correct
+            and a genuine improvement over the source's trapping <code>Int(UInt64)</code>. No M1&ndash;M8 regression. Findings:</p>
+            <ul>
+                <li><strong>Missing culture-invariance (fr-FR) test</strong> (Medium, <em>Fixed</em>) &mdash; the
+                    <code>.editorconfig</code> mandates one for a number-parsing/formatting milestone; added
+                    <code>ParsingIsCultureInvariant</code>. The production code was already invariant throughout.</li>
+                <li><strong><code>Uri.Equals</code> ignores the URL fragment</strong> (Low, Deferred) &mdash; two
+                    <code>url(...)</code> locations differing only by <code>#fragment</code> compare equal (the source's
+                    <code>URL</code> would treat them as unequal). A meaningless edge for data-block files; if exact parity is
+                    ever wanted, compare <code>AbsoluteUri</code> ordinally.</li>
+                <li><strong><code>UriKind.Absolute</code> narrows the source's lenient <code>URL(string:)</code></strong>
+                    (Info, Deferred) &mdash; intentional and correct for a <code>url(...)</code> resource; both tested URLs
+                    round-trip byte-for-byte.</li>
+                <li><strong>Leading <code>+</code> accepted by the numeric parse</strong> (Info, Deferred) &mdash; a
+                    <code>+</code>-prefixed input that never occurs in real files; negatives are still rejected.</li>
+            </ul>
+        </div>
+        <div class="field"><div class="label">Review comments</div>
+            <ul>
+                <li>The maintainer reviewed the milestone and approved it as-is (&ldquo;Looks good&rdquo;), with no change
+                    requests. The deferred <code>Low</code>/<code>Info</code> observations (<code>Uri.Equals</code> ignoring the
+                    URL fragment, the intentional <code>UriKind.Absolute</code> narrowing, and the accepted leading <code>+</code>)
+                    were accepted without action.</li>
+            </ul>
+        </div>
     </div>
 
     <!-- M10 -->
