@@ -302,6 +302,40 @@ public readonly struct XISFValue : IEquatable< XISFValue >
         }
     }
 
+    /// <summary>A readable summary of the value: its kind and its payload.</summary>
+    /// <remarks>
+    /// The form is <c>Kind(payload)</c> - for example <c>Integer(5)</c>,
+    /// <c>Float(1.5)</c>, <c>Complex(1, 2)</c>, <c>String("hi")</c>,
+    /// <c>Time Point(2026-07-19T00:00:00.0000000+00:00)</c> or <c>Data(12 bytes)</c>.
+    /// A byte payload is summarized by its length rather than dumped, so a large
+    /// vector, matrix or byte-array value describes cheaply. Every number is
+    /// formatted with <see cref="CultureInfo.InvariantCulture"/>. Like any
+    /// <see cref="object.ToString"/>, this never throws: the eight kinds are all
+    /// handled, and the unreachable fallback returns the kind's name rather than
+    /// throwing.
+    /// </remarks>
+    /// <returns>The formatted summary.</returns>
+    public override string ToString()
+    {
+        // Copied to a local because a local function in a struct cannot access 'this'.
+        XISFValueKind kind = this.kind;
+
+        string Describe( string payload ) => $"{ kind.Description() }({ payload })";
+
+        return this.kind switch
+        {
+            XISFValueKind.Boolean         => Describe( this.numeric != 0L ? "true" : "false" ),
+            XISFValueKind.Integer         => Describe( this.numeric.ToString( CultureInfo.InvariantCulture ) ),
+            XISFValueKind.UnsignedInteger => Describe( unchecked( ( ulong )this.numeric ).ToString( CultureInfo.InvariantCulture ) ),
+            XISFValueKind.Float           => Describe( BitConverter.Int64BitsToDouble( this.numeric ).ToString( CultureInfo.InvariantCulture ) ),
+            XISFValueKind.Complex         => Describe( $"{ BitConverter.Int64BitsToDouble( this.numeric ).ToString( CultureInfo.InvariantCulture ) }, { BitConverter.Int64BitsToDouble( this.numericSecondary ).ToString( CultureInfo.InvariantCulture ) }" ),
+            XISFValueKind.String          => Describe( $"\"{ this.text ?? "" }\"" ),
+            XISFValueKind.TimePoint       => Describe( this.timePoint.ToString( "o", CultureInfo.InvariantCulture ) ),
+            XISFValueKind.Data            => Describe( $"{ this.data.Length.ToString( CultureInfo.InvariantCulture ) } bytes" ),
+            _                             => this.kind.ToString(),
+        };
+    }
+
     /// <summary>
     /// Parses a value from a <c>&lt;Property&gt;</c> element's <c>value</c>
     /// attribute string, for a value-attribute type.

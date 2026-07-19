@@ -404,7 +404,7 @@
         <div class="phase">Phase 5 &middot; File, integration &amp; finalization</div>
         <ol>
             <li><a href="#m14"><span class="num">M14</span> XISFFile &mdash; entry point, preamble &amp; validation</a> <span class="capsule status-completed">Completed</span></li>
-            <li><a href="#m15"><span class="num">M15</span> Descriptions, integration &amp; finalization</a> <span class="capsule status-not-started">Not started</span></li>
+            <li><a href="#m15"><span class="num">M15</span> Descriptions, integration &amp; finalization</a> <span class="capsule status-completed">Completed</span></li>
         </ol>
     </div>
 
@@ -1943,7 +1943,7 @@
     <div class="milestone" id="m15">
         <div class="m-head">
             <h3>M15 &middot; Descriptions, integration &amp; finalization</h3>
-            <span class="capsule status-not-started">Not started</span>
+            <span class="capsule status-completed">Completed</span>
         </div>
         <div class="field">
             <div class="label">Goal</div>
@@ -1960,11 +1960,117 @@
                 <li class="task">Confirm <code>DotNetXISF.slnx</code>, both <code>.csproj</code> files and <code>ci-win.yaml</code> are consistent and the Windows CI passes in Debug and Release.</li>
             </ul>
         </div>
-        <div class="field"><div class="label">Status</div><span class="capsule status-not-started">Not started</span></div>
-        <div class="field"><div class="label">Completed</div><span class="placeholder">&mdash;</span></div>
-        <div class="field"><div class="label">Implementation notes</div><p class="placeholder">To be filled in during implementation.</p></div>
-        <div class="field"><div class="label">Automated review</div><p class="placeholder">To be filled in during implementation.</p></div>
-        <div class="field"><div class="label">Review comments</div><p class="placeholder">Awaiting human review.</p></div>
+        <div class="field"><div class="label">Status</div><span class="capsule status-completed">Completed</span></div>
+        <div class="field"><div class="label">Completed</div>2026-07-19</div>
+        <div class="field"><div class="label">Implementation notes</div>
+            <p>The finalization milestone. The only structured public type still missing a <code>ToString()</code>
+            was <code>XISFValue</code> (deferred here from M11); it was added, the Descriptions suite was completed,
+            the README was written, and the whole solution was confirmed green with zero warnings in both
+            configurations.</p>
+            <ul>
+                <li><strong><code>XISFValue.ToString()</code> (the M11 deferral):</strong> renders as
+                    <code>Kind(payload)</code> &mdash; <code>Integer(5)</code>, <code>Float(1.5)</code>,
+                    <code>Complex(1, 2)</code>, <code>String("hi")</code>,
+                    <code>Time Point(2021-01-02T03:04:05.0000000+00:00)</code> (round-trip <code>"o"</code> format),
+                    <code>Data(12 bytes)</code>, <code>Boolean(true)</code>,
+                    <code>Unsigned Integer(65535)</code>. The kind prefix reuses the existing
+                    <code>XISFValueKind.Description()</code>; each payload branch reads the same storage slot its
+                    factory writes (the bit-reinterpreted <code>numeric</code>/<code>numericSecondary</code> slots for
+                    the numeric kinds, via <code>BitConverter.Int64BitsToDouble</code> and
+                    <code>unchecked( ( ulong ) )</code>). A byte payload is summarized by its length rather than dumped,
+                    so a large vector/matrix/byte-array value describes cheaply. Every number is formatted with
+                    <code>CultureInfo.InvariantCulture</code>. The method never throws (per the maintainer's review): the
+                    eight kinds are all handled, and the unreachable <code>default</code> returns the kind's name rather
+                    than throwing. This automatically improves <code>XISFProperty.ToString</code>'s <code>value:</code> slot, which
+                    interpolates the value. <em>Note: the source's <code>XISFValue</code> has no value-level
+                    description &mdash; only its nested kind does &mdash; so this is a port addition, described on the
+                    type's own terms with no divergence to mirror.</em></li>
+                <li><strong>Descriptions suite completed:</strong> extended <code>DescriptionsTests</code> with the
+                    remaining cases (data-block-location, data-block, checksum/compression, the element-initialized
+                    color types, and the aggregate rich-file test), plus two new <code>XISFValue</code> tests
+                    (<code>ValueDescriptions</code> asserting the exact <code>Kind(payload)</code> string for all eight
+                    kinds, and <code>ValueDescriptionIsCultureInvariant</code>, a fr-FR culture-swap over the
+                    float/complex/time-point formatting &mdash; required because <code>XISFValue.ToString</code> now
+                    formats those culture-sensitive kinds). The <code>RichFile()</code> builder parses a synthetic unit
+                    carrying every ancillary element (resolution, display function, RGB working space, CFA, ICC profile,
+                    thumbnail, a property, a keyword, and unit metadata) and asserts every aggregate type describes
+                    non-emptily. 7 new tests.</li>
+                <li><strong>Every public type has a <code>ToString()</code>:</strong> a repository sweep confirmed every
+                    structured public type overrides <code>ToString()</code> after this milestone (the value types, the
+                    aggregates, and the format enums via their <code>SpecToken()</code>/<code>Description()</code>
+                    companions). <code>XISFException</code> intentionally relies on the base <code>Exception</code>
+                    (its <code>Message</code> carries the readable text, as the M2 tests pin).</li>
+                <li><strong>Integration &amp; parity:</strong> every file under the repo-root <code>Test Files/</code>
+                    is confirmed to parse by the M14 <code>ParsesAllTestFiles</code>/<code>ParsesAllTestFilesStrictly</code>
+                    fixture tests. The C# suite is a faithful <em>superset</em> of the source's ~226 tests: the ported
+                    tests plus C#-specific additions (default-struct-safety, culture-swap, equality/hash and the
+                    stricter assertions noted in earlier milestones). Total: <strong>289 tests, 0 failed</strong> in both
+                    Debug and Release.</li>
+                <li><strong>Clean build, no placeholders:</strong> <code>dotnet build</code> reports
+                    <strong>0 warnings, 0 errors</strong> in both Debug and Release (warnings-as-errors, nullable,
+                    overflow checks, and <code>GenerateDocumentationFile</code> so a missing public doc fails with
+                    <code>CS1591</code>). A grep confirmed no <code>TODO</code>/<code>FIXME</code>/<code>NotImplemented</code>
+                    remain in the sources.</li>
+                <li><strong>README:</strong> rewrote <code>README.md</code> from a stub to the maintainer's template
+                    &mdash; About, Status (read-only), Features, Conformance &amp; Limitations (opaque pixel data,
+                    opt-in local-only external blocks with remote URLs never fetched, platform-gated SHA-3, unimplemented
+                    <code>Reference</code>/<code>uid</code>, optional <code>Metadata</code>, tables out of scope,
+                    strict-vs-lenient, culture-invariance, the not-thread-safe list), Requirements (.NET&nbsp;10 plus the
+                    two managed NuGet dependencies for lz4/lz4hc and zstd, with zlib built in), Building, and an Example
+                    Usage. The example was <strong>compile-verified</strong> by building it as a throwaway console app
+                    against the library (0 warnings under the same warnings-as-errors settings). Described entirely on
+                    the project's own terms &mdash; no reference to the source project.</li>
+                <li><strong>Solution / project / CI consistency:</strong> confirmed <code>DotNetXISF.slnx</code>
+                    references both projects; both <code>.csproj</code> files target <code>net10.0</code> with matching
+                    quality flags (the library adds <code>GenerateDocumentationFile</code> and the two package
+                    references; the test project omits doc generation, as intended); and <code>ci-win.yaml</code> runs
+                    <code>dotnet test</code> on the solution in both Debug and Release (the two managed packages restore
+                    transitively, so no CI change was needed). <em>Caveat: the Windows CI itself runs on GitHub Actions
+                    on push and cannot be executed from here &mdash; local Debug and Release are green and the CI
+                    configuration is consistent, but the actual Windows run happens when the maintainer pushes.</em></li>
+                <li><strong>Result:</strong> <code>dotnet build</code> clean (0 warnings, 0 errors) and
+                    <code>dotnet test</code> green (<strong>289 passed, 0 failed; 7 new</strong>) in both Debug and
+                    Release. The port is complete.</li>
+            </ul>
+        </div>
+        <div class="field"><div class="label">Automated review</div>
+            <p>One review round (fresh-context sub-agent reviewing the uncommitted changes cold); converged immediately
+            with <strong>no defects</strong> (no Critical/High/Medium/Low). The reviewer independently rebuilt/re-ran
+            both configs (289/289 pass, 0 warnings), hand-traced every <code>XISFValue.ToString()</code> branch against
+            the slot its factory writes (confirming the bit-reinterpretation and culture-invariant formatting are
+            correct for all eight kinds), verified every exact-string test assertion matches the implementation output,
+            confirmed the fr-FR culture swap is a genuine guard, checked every README claim against the code (the two
+            dependencies and <code>net10.0</code>, the codec set, the SHA-3 gate, the external-location opt-in off in
+            both presets, the optional <code>Metadata</code>, the not-thread-safe <code>LazyThreadSafetyMode.None</code>,
+            and that the Example Usage API all exists with the stated names/types), and confirmed no
+            Swift/source-project references leaked into the README, tests or sources. Two <code>Info</code> observations,
+            neither requiring a change:</p>
+            <ul>
+                <li><strong>C# suite is a deliberate superset</strong> (Info, Deferred) &mdash; the source's
+                    <code>XISFValue</code> has no value-level description (only its nested kind does), so the two new
+                    <code>XISFValue</code> <code>ToString</code> tests have no counterpart to diverge from; the other
+                    ported Descriptions tests (including the identical <code>RichFile()</code> XML) are faithful.</li>
+                <li><strong><code>ToString</code> throwing on the unreachable <code>default</code> branch</strong>
+                    (Info, <em>Resolved on human review</em>) &mdash; departed from the general BCL guidance that
+                    <code>ToString</code> should not throw. On the maintainer's review the method was reworked to be
+                    throw-free (the unreachable <code>default</code> now returns the kind's name), see Review comments.</li>
+            </ul>
+        </div>
+        <div class="field"><div class="label">Review comments</div>
+            <ul>
+                <li><strong>Don't throw on an unreachable <code>ToString()</code> branch &mdash; return a string.</strong>
+                    (Change request.) Since the <code>default</code> arm of <code>XISFValue.ToString()</code> is
+                    unreachable (all eight kinds are handled), it should not throw; a <code>ToString()</code> that never
+                    throws is the better practice. <em>Applied:</em> reworked <code>ToString()</code> so no path throws
+                    &mdash; the kind-labelled form is built by a small local helper for the eight known kinds, and the
+                    unreachable <code>default</code> now returns a plain string fallback (<code>this.kind.ToString()</code>)
+                    instead of throwing. This also removes the secondary throw that <code>XISFValueKind.Description()</code>
+                    would have raised for an unknown kind, so the whole method is now throw-free. The eight known kinds
+                    produce byte-for-byte the same output, so the exact-string description tests are unaffected.</li>
+                <li>After the change, the maintainer reviewed the milestone again and approved it as-is
+                    (&ldquo;Looks good&rdquo;).</li>
+            </ul>
+        </div>
     </div>
 
     <!-- ============================ APPENDIX ============================ -->
