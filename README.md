@@ -2,6 +2,7 @@ DotNetXISF
 ==========
 
 [![Build Status](https://img.shields.io/github/actions/workflow/status/macmade/DotNetXISF/ci-win.yaml?label=Windows&logo=dotnet)](https://github.com/macmade/DotNetXISF/actions/workflows/ci-win.yaml)
+[![NuGet](https://img.shields.io/nuget/v/DotNetXISF.svg?logo=nuget)](https://www.nuget.org/packages/DotNetXISF)
 [![Issues](http://img.shields.io/github/issues/macmade/DotNetXISF.svg?logo=github)](https://github.com/macmade/DotNetXISF/issues)
 ![Status](https://img.shields.io/badge/status-active-brightgreen.svg?logo=git)
 ![License](https://img.shields.io/badge/license-mit-brightgreen.svg?logo=open-source-initiative)  
@@ -97,6 +98,21 @@ two managed NuGet dependencies for them —
 binaries), MIT-licensed and cross-platform; `zlib` uses the built-in `System.IO.Compression`. The
 library is continuously built and tested on Windows (see the CI badge above) in both Debug and Release
 configurations. Nothing platform-specific is used, so the library runs anywhere .NET 10 does.
+
+### Installation
+
+DotNetXISF is available on [NuGet](https://www.nuget.org/packages/DotNetXISF). Add it to your project
+with the .NET CLI:
+
+```bash
+dotnet add package DotNetXISF
+```
+
+Or add a `<PackageReference>` to your project file:
+
+```xml
+<PackageReference Include="DotNetXISF" Version="1.0.0" />
+```
 
 ### Building
 
