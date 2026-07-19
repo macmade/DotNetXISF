@@ -403,7 +403,7 @@
 
         <div class="phase">Phase 5 &middot; File, integration &amp; finalization</div>
         <ol>
-            <li><a href="#m14"><span class="num">M14</span> XISFFile &mdash; entry point, preamble &amp; validation</a> <span class="capsule status-not-started">Not started</span></li>
+            <li><a href="#m14"><span class="num">M14</span> XISFFile &mdash; entry point, preamble &amp; validation</a> <span class="capsule status-completed">Completed</span></li>
             <li><a href="#m15"><span class="num">M15</span> Descriptions, integration &amp; finalization</a> <span class="capsule status-not-started">Not started</span></li>
         </ol>
     </div>
@@ -1783,7 +1783,7 @@
     <div class="milestone" id="m14">
         <div class="m-head">
             <h3>M14 &middot; XISFFile &mdash; entry point, preamble &amp; validation</h3>
-            <span class="capsule status-not-started">Not started</span>
+            <span class="capsule status-completed">Completed</span>
         </div>
         <div class="field">
             <div class="label">Goal</div>
@@ -1799,11 +1799,144 @@
                 <li class="task">Port the <code>XISFFile</code> tests (35): preamble validity/rejections, strict/lenient reserved &amp; version, header-length bounds, reads-from-path, external-image resolution gating, top-level element names, properties/keywords/images/metadata exposure, wrong-root/namespace, non-namespaced header, malformed-XML &mdash; plus the sample-fixture tests (<code>ParsesAllTestFiles</code>, consistent geometry, and the autocrop/corrected fixture assertions) against the two repo-root <code>.xisf</code> files.</li>
             </ul>
         </div>
-        <div class="field"><div class="label">Status</div><span class="capsule status-not-started">Not started</span></div>
-        <div class="field"><div class="label">Completed</div><span class="placeholder">&mdash;</span></div>
-        <div class="field"><div class="label">Implementation notes</div><p class="placeholder">To be filled in during implementation.</p></div>
-        <div class="field"><div class="label">Automated review</div><p class="placeholder">To be filled in during implementation.</p></div>
-        <div class="field"><div class="label">Review comments</div><p class="placeholder">Awaiting human review.</p></div>
+        <div class="field"><div class="label">Status</div><span class="capsule status-completed">Completed</span></div>
+        <div class="field"><div class="label">Completed</div>2026-07-19</div>
+        <div class="field"><div class="label">Implementation notes</div>
+            <p>Implemented with TDD. Wrote the full <code>XISFFile</code> test suite first (extending the M1
+            constants-guard test), confirmed it failed to compile (<code>XISFFile</code> had no constructors or
+            accessors yet), then completed the type to green. Completes the type created as constants-only in M1;
+            placed under <code>Core/</code>, mirroring the source layout.</p>
+            <ul>
+                <li><strong>Preamble validation (order and error kinds mirror the source exactly):</strong> empty
+                    &rarr; <code>DataError</code>; <code>MatchesAscii</code> signature at 0 &rarr;
+                    <code>InvalidSignature</code> (false, not a throw, on a too-short file); length &lt;
+                    <code>PreambleSize</code> &rarr; <code>InvalidHeaderLength</code>; little-endian
+                    <code>UInt32</code> reserved at offset 12 (non-zero &rarr; <code>InvalidSignature</code> unless
+                    lenient); little-endian <code>UInt32</code> header length at offset 8 (zero &rarr;
+                    <code>InvalidHeaderLength</code>); then the fits-in-file guard, the header slice, strict UTF-8
+                    decode, XML parse and root validation.</li>
+                <li><strong>Hostile-file overflow safety (M9 convention):</strong> the header-fits guard is computed as
+                    <code>( long )PreambleSize + headerLength</code> so the sum cannot overflow under the project's
+                    checked arithmetic; only after that guard proves <code>headerLength &le; data.Length -
+                    PreambleSize</code> is it narrowed to <code>int</code> for the slice, so a pathologically large
+                    declared length yields a clean <code>XISFException</code>, never an <code>OverflowException</code>.
+                    Covered by the past-end and zero-length rejection tests.</li>
+                <li><strong>Strict UTF-8 header decode:</strong> a static <code>UTF8Encoding( false, true )</code>
+                    (throw-on-invalid) decodes the header bytes; a <code>DecoderFallbackException</code> becomes a clean
+                    <code>MalformedXml</code>, reproducing Swift's <code>String(data:encoding:.utf8)</code> returning
+                    <code>nil</code>. The verbatim header string is stored as <code>HeaderXml</code> (M2 acronym casing:
+                    <code>Xml</code>, not <code>XML</code>).</li>
+                <li><strong>Root validation:</strong> root must be <code>xisf</code>; a namespace other than the XISF
+                    namespace (empty/absent tolerated) is rejected; under strict parsing the <code>version</code>
+                    attribute must equal <code>1.0</code> (missing or different tolerated under lenient). Message text
+                    matches the source (including the &ldquo;no version attribute&rdquo; wording).</li>
+                <li><strong>Accessors &amp; collision resolution:</strong> <code>HeaderElementNames</code>,
+                    <code>Properties</code>, <code>Keywords</code>, <code>Images</code>, optional <code>Metadata</code>,
+                    the <code>[ id ]</code> indexer (first match or <code>null</code>, ordinal), and
+                    <code>KeywordsNamed( name )</code>. The keyword-lookup method is <code>KeywordsNamed</code> rather
+                    than an overload of the <code>Keywords</code> property, resolving the C# property-vs-method name
+                    collision exactly as M6's <code>XISFElement.ChildrenNamed</code> did (a member cannot share the
+                    property's name). <em>See Review comments &mdash; surfaced for confirmation.</em></li>
+                <li><strong>Copy-on-read (M6 convention):</strong> <code>Properties</code>/<code>Keywords</code>/
+                    <code>Images</code> are private <code>StoredX</code> get-only auto-property arrays exposed as
+                    <code>=&gt; this.StoredX.ToArray()</code> (the M13 <code>XISFImage</code> pattern), and
+                    <code>HeaderElementNames</code> recomputes a fresh array per read, so no internal state is exposed
+                    for mutation.</li>
+                <li><strong>Constructors:</strong> a public byte-buffer ctor (<code>ReadOnlyMemory&lt;byte&gt;</code>,
+                    delegating with a <code>null</code> base directory), a public path ctor (<code>string</code>), and
+                    the internal base-directory ctor that does the parsing. The path ctor delegates via
+                    <code>: this( ReadFile( path ), Path.GetDirectoryName( path ), options )</code> &mdash; left-to-right
+                    argument evaluation ensures a missing path throws from <code>ReadFile</code> before the directory is
+                    taken, the C# analog of the Swift convenience-init chain (which C# cannot express with statements
+                    before <code>this(&hellip;)</code>).</li>
+                <li><strong>Path-read failure classification:</strong> <code>ReadFile</code> reads via
+                    <code>File.ReadAllBytes</code> and classifies a failure <em>after</em> the attempt (no
+                    time-of-check/time-of-use gap): a missing path or a directory &rarr; <code>InvalidFileUrl</code>,
+                    anything else &rarr; <code>CannotReadFile</code>. The <code>when</code> catch filter covers the
+                    documented <code>File.ReadAllBytes</code> throw set (<code>IOException</code> and its
+                    missing/too-long subclasses, <code>UnauthorizedAccessException</code>, <code>ArgumentException</code>,
+                    <code>NotSupportedException</code>, <code>SecurityException</code>) &mdash; including
+                    <code>SecurityException</code>, closing the parity gap the M10 review noted for the data-block reader.</li>
+                <li><strong>Metadata drop-vs-throw:</strong> <code>ParseMetadata</code> returns <code>null</code> when no
+                    <code>Metadata</code> element is present, and under lenient parsing drops a malformed one (catching
+                    <code>XISFException</code> only, so unrelated exceptions still propagate) rather than failing the
+                    whole unit.</li>
+                <li><strong><code>ToString()</code>:</strong> the multi-line <code>XISFFile { Header: N characters }</code>
+                    summary mirroring the source's <code>description</code>, with the character count formatted via
+                    <code>CultureInfo.InvariantCulture</code>. The M15 Descriptions suite only asserts it is non-empty,
+                    so this form is stable.</li>
+                <li><strong>Culture-invariance:</strong> every numeric value formatted into a message or
+                    <code>ToString()</code> (reserved field, header length, file length, preamble size, header char
+                    count) uses <code>CultureInfo.InvariantCulture</code>; no number is raw-interpolated (CA1305 would
+                    fail the build otherwise), and all string comparisons are <code>StringComparison.Ordinal</code>.
+                    <em>No dedicated fr-FR test was added:</em> <code>XISFFile</code> parses no numbers from text (the
+                    header length is a binary little-endian field; the version is a string-equality check), so the only
+                    culture surface is invariant integer formatting, which CA1305 enforces. This differs from the
+                    number-<em>parsing</em> milestones (M5/M9/M11/M12) that added fr-FR parse tests.</li>
+                <li><strong>Real-fixture integration tests:</strong> the two repo-root sample files
+                    (<code>&hellip;_autocrop.xisf</code> and <code>&hellip;_corrected.xisf</code>) are parsed end-to-end
+                    &mdash; every file parses under both lenient and strict; per-image geometry is self-consistent; and
+                    the autocrop (RGB integration + Gray crop-mask, scalar property + FITS keyword values, unit
+                    metadata, decoded pixel byte count) and corrected (single RGB image with thumbnail, ICC profile,
+                    resolution, display function; decoded ICC and thumbnail bytes) fixtures assert the exact values the
+                    Swift suite asserts. These exercise the whole M4&ndash;M13 stack against genuine PixInsight output.</li>
+                <li><strong>Result:</strong> <code>dotnet build</code> clean (0 warnings, 0 errors) and
+                    <code>dotnet test</code> green (<strong>282 passed, 0 failed; 34 new</strong>) in both Debug and
+                    Release; no M1&ndash;M13 regression.</li>
+            </ul>
+        </div>
+        <div class="field"><div class="label">Automated review</div>
+            <p>One review round (fresh-context sub-agent reviewing the uncommitted changes cold); converged immediately
+            with <strong>no Critical/High/Medium findings</strong>. The reviewer independently rebuilt/re-ran both
+            configs (282/282 pass, 0 warnings), read both changed files and the Swift originals, and verified: the
+            preamble validation order and error kinds line-for-line; the header-fits <code>long</code> guard and the
+            provably-safe <code>int</code> narrowing (no <code>OverflowException</code> reachable under checked
+            arithmetic); the strict UTF-8 decode rejection; the XXE posture inherited from <code>XISFXmlParser</code>
+            (<code>DtdProcessing.Prohibit</code> + null resolver); copy-on-read on every collection; culture-invariant
+            integer formatting and ordinal comparisons; the <code>ReadFile</code> catch filter covering the full
+            <code>File.ReadAllBytes</code> throw set with post-read classification (no TOCTOU gap); the constructor
+            delegation chain; the metadata drop-vs-throw; and complete test parity with the Swift <code>Test_XISFFile</code>
+            suite. Four <code>Low</code>/<code>Info</code> observations, none requiring a change:</p>
+            <ul>
+                <li><strong>Whole-file <code>byte[]</code> read vs. Swift's memory-map</strong> (Low, Deferred) &mdash;
+                    the path ctor uses <code>File.ReadAllBytes</code> (fully resident, 2&nbsp;GB cap &rarr; a too-large
+                    file throws a cleanly-caught <code>IOException</code> classified as <code>CannotReadFile</code>)
+                    rather than Swift's demand-paged <code>.mappedIfSafe</code>; deliberate (no whole-file field on the
+                    object) and consistent with the M10 external-read decision. Optional: a one-line note that the whole
+                    file is read into memory.</li>
+                <li><strong><code>ParseMetadata</code> catches only <code>XISFException</code></strong> (Info, Deferred)
+                    &mdash; Swift's <code>parseMetadata</code> uses a bare <code>catch</code>; the C# narrows it, which
+                    is unobservable (the pipeline only throws <code>XISFException</code>) and the safer choice
+                    (won't swallow programmer errors). Intentional, consistent with the M11/M13 optional-child catches.</li>
+                <li><strong>Bare-filename base directory is <code>""</code>, not <code>null</code></strong> (Info,
+                    Deferred) &mdash; <code>Path.GetDirectoryName( "image.xisf" )</code> returns <code>""</code>, so the
+                    internal ctor gets an empty base rather than the <code>null</code> the raw-bytes ctor passes;
+                    behavior is correct (<code>@header_dir</code> resolves against the current directory) and untested.</li>
+                <li><strong>Exotic filesystem entries classify slightly differently than Swift</strong> (Info, Deferred)
+                    &mdash; for a path that exists but is neither a regular file nor a directory (broken symlink, FIFO,
+                    device node), the classifier yields <code>InvalidFileUrl</code> where Swift would yield
+                    <code>cannotReadFile</code>. Negligible; no real XISF file is such an entry.</li>
+            </ul>
+        </div>
+        <div class="field"><div class="label">Review comments</div>
+            <ul>
+                <li>The maintainer reviewed the milestone and approved it as-is (&ldquo;Looks good&rdquo;), with no
+                    change requests.</li>
+                <li><strong><code>KeywordsNamed</code> naming confirmed.</strong> The property-vs-method collision
+                    resolution &mdash; exposing the keyword-lookup as <code>KeywordsNamed( name )</code> rather than an
+                    overload of the <code>Keywords</code> property, following the M6 <code>ChildrenNamed</code>
+                    precedent &mdash; was accepted, along with the <code>HeaderXml</code> acronym casing and the
+                    file-path constructor in place of Swift's <code>URL</code>.</li>
+                <li><strong>No fr-FR culture test in M14 accepted.</strong> The maintainer accepted omitting a dedicated
+                    culture-swap test: <code>XISFFile</code> parses no numbers from text (the header length is a binary
+                    little-endian field; the version is a string-equality check), so its only culture surface is
+                    invariant integer formatting, which CA1305 enforces at build time. This intentionally differs from
+                    the number-parsing milestones (M5/M9/M11/M12).</li>
+                <li>The deferred <code>Low</code>/<code>Info</code> observations (whole-file read vs. memory-map, the
+                    <code>XISFException</code>-only metadata catch, the <code>""</code>-vs-<code>null</code> bare-filename
+                    base directory, and the exotic-filesystem-entry classification) were accepted without action.</li>
+            </ul>
+        </div>
     </div>
 
     <!-- M15 -->
